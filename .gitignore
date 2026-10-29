@@ -1,0 +1,23 @@
+# Generated data and local working files
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Raster and array intermediates
+*.tif
+*.tiff
+*.npz
+*.bin.gz
+*.log
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
