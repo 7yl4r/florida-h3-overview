@@ -21,3 +21,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Deploy staging
+dist/

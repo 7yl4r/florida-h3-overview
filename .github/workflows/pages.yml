@@ -1,0 +1,56 @@
+name: Deploy viewer to GitHub Pages
+
+# Publishes the static viewer shell (viewer/florida.html) to GitHub Pages.
+# data/ is gitignored and local-only, so the deployed viewer is a shell: it
+# shows "import a product first" until a catalog URL is supplied, e.g.
+#   https://<user>.github.io/florida-h3-overview/florida.html?catalog=<hosted catalog>&year=2017
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate before deploy
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m py_compile src/florida_h3/*.py tools/*.py
+          PYTHONPATH=src python -m pytest tests/ -q
+          python -c "import re,pathlib; html=pathlib.Path('viewer/florida.html').read_text(); body=re.findall(r'<script[^>]*>(.*?)</script>', html, re.S)[1][1]; pathlib.Path('/tmp/viewer.js').write_text(body)"
+          node --check /tmp/viewer.js
+
+      - name: Stage viewer bundle
+        run: |
+          rm -rf dist
+          mkdir -p dist
+          cp viewer/florida.html dist/florida.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
