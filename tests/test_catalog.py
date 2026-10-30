@@ -1,13 +1,23 @@
 """Tests for catalog build/verify, including the imported demo product."""
 
 import json
+from pathlib import Path
+
+import pytest
 
 from florida_h3.campaign import Campaign
 from florida_h3.catalog import build_catalog, load_catalog, verify_catalog, write_catalog
 
 CAMPAIGN = "campaigns/florida-south.json"
+CATALOG_DATA = Path("data/florida/catalog.json")
+
+requires_demo_data = pytest.mark.skipif(
+    not CATALOG_DATA.exists(),
+    reason="demo data not present (data/ is gitignored and local-only)",
+)
 
 
+@requires_demo_data
 def test_build_catalog_structure():
     c = Campaign.load(CAMPAIGN)
     cat = build_catalog(c)
@@ -26,11 +36,13 @@ def test_build_catalog_structure():
     assert entry["overview"]["res"] == 7
 
 
+@requires_demo_data
 def test_verify_catalog_passes_on_demo_data():
     c = Campaign.load(CAMPAIGN)
     assert verify_catalog(c) == []
 
 
+@requires_demo_data
 def test_verify_catalog_catches_tampered_hash():
     c = Campaign.load(CAMPAIGN)
     cat = load_catalog(c.catalog_path)
@@ -41,4 +53,3 @@ def test_verify_catalog_catches_tampered_hash():
         assert any("campaign hash does not match" in e for e in errors)
     finally:
         write_catalog(c)
-

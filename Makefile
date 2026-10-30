@@ -9,7 +9,7 @@ PY ?= /home/tylar/miniconda3/bin/python
 NODE ?= node
 VIEWER_JS := /tmp/florida-viewer-check.js
 
-.PHONY: help deploy test lint check serve clean fmt
+.PHONY: help deploy publish test lint check serve clean fmt
 
 help:
 	@echo "Florida H3 Overview — targets:"
@@ -57,6 +57,9 @@ deploy: check
 	@echo "Note: data/ is gitignored and local-only, so the deployed viewer shell"
 	@echo "shows 'import a product first' until a catalog URL is supplied, e.g.:"
 	@echo "  http://localhost:8000/florida.html?catalog=./catalog.json&year=2017"
+
+# Alias kept so CI workflows that invoke `make publish` keep working.
+publish: deploy
 
 clean:
 	rm -rf dist

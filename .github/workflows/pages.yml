@@ -33,14 +33,13 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Validate before deploy
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m py_compile src/florida_h3/*.py tools/*.py
-          PYTHONPATH=src python -m pytest tests/ -q
-          python -c "import re,pathlib; html=pathlib.Path('viewer/florida.html').read_text(); body=re.findall(r'<script[^>]*>(.*?)</script>', html, re.S)[1][1]; pathlib.Path('/tmp/viewer.js').write_text(body)"
-          node --check /tmp/viewer.js
+          python -m pip install pytest h3 shapely pyproj numpy rasterio
+
+      - name: Validate before deploy (make deploy)
+        run: make deploy
 
       - name: Stage viewer bundle
         run: |
