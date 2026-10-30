@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "name": "Southern Florida and Florida EEZ",
+  "slug": "florida-south",
+  "description": "Southern half of Florida, including state waters and the Florida EEZ, as a campaign-driven H3 overview. The AOI is a polygon, not a bounding box.",
+  "aoi": {
+    "path": "florida-south.geojson",
+    "buffer_km": 0
+  },
+  "analysis": {
+    "crs": "EPSG:3086",
+    "pixel_size": 90,
+    "detail_pixel_size": 30,
+    "note": "90 m for the res-7 overview keeps a 2017 year build in the low tens of GB; 30 m is reserved for res-8 detail."
+  },
+  "resolutions": {
+    "overview": 7,
+    "detail": 8,
+    "region_res": 4
+  },
+  "years": {
+    "start": 2017,
+    "end": 2017,
+    "build": [2017]
+  },
+  "temporal": {
+    "epoch": "2000-01-01",
+    "bin_days": 16
+  },
+  "sources": {
+    "stac_endpoint": "https://planetarycomputer.microsoft.com/api/stac/v1",
+    "collection": "landsat-c2-l2",
+    "platforms": ["landsat-7", "landsat-8"]
+  },
+  "processing": {
+    "min_valid_fraction": 0.25,
+    "max_scene_cloud": 85.0,
+    "max_pixel_cloud": 90.0,
+    "max_scenes_per_composite": 12,
+    "composite_stat": "median"
+  },
+  "output": {
+    "root": "data/florida"
+  },
+  "events": [
+    {
+      "date": "2017-09-10",
+      "label": "Irma",
+      "full": "Hurricane Irma (Cat 5, 6 Sep-13 Oct 2017)",
+      "kind": "hurricane"
+    },
+    {
+      "date": "2020-05-04",
+      "label": "COVID-19",
+      "full": "COVID-19 shutdown; reduced boat traffic and dredging",
+      "kind": "context"
+    },
+    {
+      "date": "2022-09-28",
+      "label": "Ian",
+      "full": "Hurricane Ian (Cat 4, 26 Sep-30 Oct 2022)",
+      "kind": "hurricane"
+    }
+  ]
+}
