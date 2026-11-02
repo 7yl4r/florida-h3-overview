@@ -5,9 +5,10 @@ name: Deploy viewer to GitHub Pages
 # shows "import a product first" until a catalog URL is supplied, e.g.
 #   https://<user>.github.io/florida-h3-overview/florida.html?catalog=<hosted catalog>&year=2017
 
+# Publishing is done locally by `make deploy`, which pushes to the gh-pages
+# branch. This workflow is kept only for manual runs from the Actions tab; it no
+# longer triggers on push, so a broken Pages action cannot block the deploy.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

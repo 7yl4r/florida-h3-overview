@@ -211,7 +211,7 @@ const $ = s => document.querySelector(s);
 //
 //   viewer/florida.html?catalog=../data/florida/catalog.json&year=2017
 const PARAMS = new URLSearchParams(location.search);
-const CATALOG_URL = PARAMS.get('catalog') || '../data/florida/catalog.json';
+const CATALOG_URL = PARAMS.get('catalog') || 'data/florida/catalog.json';
 const CATALOG_BASE = CATALOG_URL.slice(0, CATALOG_URL.lastIndexOf('/') + 1);
 const absURL = (rel) => rel ? new URL(rel, new URL(CATALOG_BASE, location.href)).href : null;
 const payloadURL = (e) => e && (e.url || absURL(e.file));

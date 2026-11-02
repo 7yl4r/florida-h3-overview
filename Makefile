@@ -1,9 +1,9 @@
 # Florida H3 Overview — build and deploy targets.
 #
-# Data under data/ is gitignored and never committed. deploy stages only the
-# viewer (a static HTML/JS app) into dist/, ready to serve over HTTP from any
-# static host (GitHub Pages, S3, a workstation, ...). The viewer must be served
-# over HTTP: browsers block fetch() on file://.
+# Data under data/ is gitignored and never committed to main. deploy validates
+# the repo, stages the viewer and the demo product into dist/, then pushes both
+# to the gh-pages branch for GitHub Pages. The viewer must be served over HTTP:
+# browsers block fetch() on file://.
 
 PY ?= /home/tylar/miniconda3/bin/python
 NODE ?= node
@@ -18,7 +18,7 @@ help:
 	@echo "  make test     run the pytest suite"
 	@echo "  make lint     byte-compile every Python module"
 	@echo "  make serve    serve the repo over HTTP for local viewer testing"
-	@echo "  make deploy   validate and stage a static deploy bundle in dist/"
+	@echo "  make deploy   validate and publish the viewer + demo data to the gh-pages branch"
 	@echo "  make clean    remove dist/ and __pycache__"
 
 check: lint test
@@ -42,21 +42,40 @@ serve:
 	$(PY) -m http.server 8000 --bind 127.0.0.1
 
 deploy: check
-	@rm -rf dist
-	@mkdir -p dist
-	cp viewer/florida.html dist/florida.html
-	@echo "=== deploy bundle staged in dist/ ==="
-	@echo "Serve it over HTTP (fetch is blocked on file://):"
-	@echo "  cd dist && python -m http.server 8000"
-	@echo "  open http://localhost:8000/florida.html?year=2017"
+	@set -e; \
+	bundle=$$(mktemp -d /tmp/florida-bundle.XXXXXX); \
+	wt=$$(mktemp -d /tmp/florida-worktree.XXXXXX); rmdir "$$wt"; \
+	cleanup() { git worktree remove --force "$$wt" >/dev/null 2>&1 || true; rm -rf "$$bundle" "$$wt"; }; \
+	trap cleanup EXIT; \
+	echo "=== deploy: staging viewer + data ==="; \
+	mkdir -p "$$bundle/data/florida"; \
+	cp viewer/florida.html "$$bundle/florida.html"; \
+	( cd data/florida && tar cf - --exclude=./cache . ) | ( cd "$$bundle/data/florida" && tar xf - ); \
+	touch "$$bundle/.nojekyll"; \
+	git fetch origin 2>/dev/null || true; \
+	git worktree add --detach "$$wt" HEAD >/dev/null; \
+	if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then \
+		git -C "$$wt" checkout -B gh-pages origin/gh-pages >/dev/null; \
+	else \
+		git -C "$$wt" checkout --orphan gh-pages >/dev/null; \
+	fi; \
+	git -C "$$wt" rm -rf . --ignore-unmatch >/dev/null 2>&1 || true; \
+	git -C "$$wt" clean -fdx >/dev/null; \
+	cp -r "$$bundle"/. "$$wt"/; \
+	git -C "$$wt" add -A; \
+	git -C "$$wt" commit -q -m "Deploy viewer + demo data $$(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"; \
+	git -C "$$wt" push origin gh-pages; \
+	echo "=== deployed to gh-pages ==="
+	@echo "Open it: https://tylar.info/florida-h3-overview/florida.html?year=2017"
 	@echo ""
-	@echo "To publish to GitHub Pages, enable"
-	@echo "  .github/workflows/pages.yml"
-	@echo "or push the dist/ contents to the gh-pages branch manually."
+	@echo "Note: data/ is gitignored locally but the demo product is deployed"
+	@echo "to gh-pages with the viewer, so the catalog loads automatically."
 	@echo ""
-	@echo "Note: data/ is gitignored and local-only, so the deployed viewer shell"
-	@echo "shows 'import a product first' until a catalog URL is supplied, e.g.:"
-	@echo "  http://localhost:8000/florida.html?catalog=./catalog.json&year=2017"
+	@echo "For local testing, open:"
+	@echo "  http://localhost:8000/viewer/florida.html?catalog=../data/florida/catalog.json&year=2017"
+	@echo ""
+	@echo "One-time: set GitHub Pages source to 'Deploy from a branch' -> gh-pages"
+	@echo "in repository settings (Pages tab). After that, 'make deploy' is all you need."
 
 # Alias kept so CI workflows that invoke `make publish` keep working.
 publish: deploy

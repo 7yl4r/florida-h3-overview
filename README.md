@@ -64,31 +64,34 @@ The viewer is a static HTML/JS app that must be served over HTTP (browsers block
 `fetch()` on `file://`).
 
 ```bash
-# validate, then stage a static deploy bundle in dist/
-make deploy         # -> dist/florida.html
-
-# serve the bundle locally to verify
-cd dist && python -m http.server 8000
-open http://localhost:8000/florida.html?year=2017
+# validate, then publish the viewer + demo product to the gh-pages branch
+make deploy         # -> https://tylar.info/florida-h3-overview/florida.html?year=2017
 ```
 
-`make deploy` runs the full validation suite before staging, so a failed test or
-syntax error blocks the bundle.
+`make deploy` runs the full validation suite before pushing, so a failed test or
+syntax error blocks the deploy.
 
 ### GitHub Actions
 
 - `.github/workflows/ci.yml` — runs pytest, py_compile, and viewer JS syntax
   checks on every push/PR to `main`.
-- `.github/workflows/pages.yml` — optional GitHub Pages deploy of the viewer
-  shell (push to `main` or manual dispatch). Enable it in repository settings
-  under Pages → GitHub Actions.
+- `.github/workflows/pages.yml` — optional GitHub Pages deploy workflow (no
+  longer required; `make deploy` handles publishing locally).
 
-`data/` is gitignored and local-only, so a Pages-deployed viewer is a shell:
-it shows "import a product first" until a catalog URL is supplied, e.g.
+`data/` is gitignored and local-only on `main`, but `make deploy` force-adds the
+demo product to the `gh-pages` branch so the catalog loads automatically on the
+deployed site.
 
+For local testing, serve the repo and pass the catalog path explicitly:
+
+```bash
+make serve          # http://localhost:8000/viewer/florida.html
+open "http://localhost:8000/viewer/florida.html?catalog=../data/florida/catalog.json&year=2017"
 ```
-https://<user>.github.io/florida-h3-overview/florida.html?catalog=<hosted catalog>&year=2017
-```
+
+One-time: set GitHub Pages source to 'Deploy from a branch' → `gh-pages` in
+repository settings (Pages tab). After that, `make deploy` is all you need — no
+browser status-checking required.
 
 ## Non-goals for now
 
