@@ -155,8 +155,8 @@ input[type=range]{accent-color:var(--accent)}
   <h1>Southern Florida &amp; EEZ <small id="srcline"></small></h1>
   <div class="ctl"><label>Year</label><select id="year"></select></div>
   <div class="ctl"><label>Detail</label><select id="resmode">
-    <option value="overview">res 7 overview</option>
-    <option value="regions">res 8 regions</option>
+    <option value="overview" id="resmode-overview">overview</option>
+    <option value="regions" id="resmode-regions">regions</option>
     <option value="both">both</option></select></div>
   <div class="ctl"><label>Colour</label><select id="colormode"></select></div>
   <div class="ctl" id="changectl" style="display:none"><label>break by</label>
@@ -518,6 +518,10 @@ async function loadYear(year){
   m=S.manifest;
   S.manifestBase=manifestURL.slice(0,manifestURL.lastIndexOf('/')+1);
   S.manifestURL=manifestURL;
+  const ovRes=(m.overview&&m.overview.res)??'?';
+  const rgRes=m.region_res??'?';
+  $('#resmode-overview').textContent=`res ${ovRes} overview`;
+  $('#resmode-regions').textContent=`res ${rgRes} regions`;
 
   // The season is derived from the *date*, never from the bin number: 16-day
   // bins do not divide the year, so bin_index mod anything is meaningless.
@@ -937,6 +941,10 @@ function visibleRegions(){
 }
 async function loadVisibleShards(){
   if(!S.map||!S.mapReady) return;
+  // The overview tier is a complete statewide product; detail shards are only
+  // needed when the user asks for them.  Loading them in overview mode is what
+  // used to pull every res-8 shard into memory at once.
+  if(S.resMode==='overview'){ updateStatus(); return; }
   const want=visibleRegions();
   const wantSet=new Set(want.map(r=>r.region));
   let loaded=0;
@@ -1169,9 +1177,11 @@ function buildLegend(){
       <div class="hintline">${spec(k).desc||''}</div>`;
   }
   const n7=S.overview?S.overview.nCells:0;
+  const ovRes=(S.manifest&&S.manifest.overview&&S.manifest.overview.res)??'?';
+  const rgRes=(S.manifest&&S.manifest.region_res)??'?';
   html+=`<div class="hintline" style="margin-top:7px;border-top:1px solid var(--line);padding-top:6px">
-    ${S.resMode==='overview'?`res 7 overview (${n7.toLocaleString()} cells)`:
-      S.resMode==='regions'?'res 8 region shards':'res 7 overview + res 8 shards'}
+    ${S.resMode==='overview'?`res ${ovRes} overview (${n7.toLocaleString()} cells)`:
+      S.resMode==='regions'?`res ${rgRes} region shards`:`res ${ovRes} overview + res ${rgRes} shards`}
     ${S.entry&&S.entry.demo?'<br><span style="color:var(--warn)">demo product: old South Florida bbox</span>':''}</div>`;
   el.innerHTML=html;
 }
@@ -1198,7 +1208,7 @@ function buildExtremes(){
   el.innerHTML=`<h3>strongest breaks</h3>`+
     (top.length?top.map(r=>`<div class="ex" data-id="${r.id}" data-region="${r.region}">
         <span class="nm">${r.id}</span><span class="vl">${r.v.toFixed(1)}</span></div>`).join('')
-      :'<div style="color:var(--muted)">no res-8 shards loaded yet</div>');
+      :'<div style="color:var(--muted)">no region shards loaded yet</div>');
   el.querySelectorAll('.ex').forEach(x=>{
     x.onclick=()=>{
       const blk=S.shards.get(x.dataset.region);
@@ -1330,7 +1340,7 @@ function renderInspector(id){
   el.innerHTML=`
     <button class="close" title="Close (esc)">&times;</button>
     <h2>H3 cell biography</h2>
-    <div class="sub">${B===S.overview?'res 7 (overview)':'res 8 (region shard)'} ·
+    <div class="sub">${B===S.overview?`res ${S.manifest.overview?.res??'?'} (overview)`:`res ${S.manifest.region_res??'?'} (region shard)`} ·
       <code>${id}</code><br>
       ${(B.areaKm2[c]*1e6).toLocaleString(undefined,{maximumFractionDigits:0})} m² ·
       ${B.lat[c].toFixed(5)}, ${B.lon[c].toFixed(5)} · ${obs.length} of ${B.periods.length}
@@ -1489,7 +1499,12 @@ function spectrumProfile(bands){
 
 /* ---------------------------------------------------------------- controls */
 function bind(){
-  $('#resmode').onchange=e=>{ S.resMode=e.target.value; applyResMode(); buildLegend(); syncURL(); };
+  $('#resmode').onchange=e=>{
+    S.resMode=e.target.value;
+    applyResMode();
+    if(S.resMode!=='overview') loadVisibleShards();
+    buildLegend(); syncURL();
+  };
   $('#season').onchange=e=>{ S.season=e.target.value; buildTimeline(); recolor(); syncURL(); };
   $('#changemetric').onchange=e=>{ S.changeMetric=e.target.value; recolor(); buildLegend(); syncURL(); };
   $('#opacity').oninput=e=>{
