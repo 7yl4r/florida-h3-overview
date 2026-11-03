@@ -66,6 +66,7 @@
  ],
  "bin_days": 16,
  "crs": "EPSG:32617",
+ "detail_res": 7,
  "epoch": "2000-01-01",
  "events": [
   {
@@ -182,7 +183,7 @@
   "nbr",
   "savi"
  ],
- "name": "South Florida Regional (res 6 overview / res 7 detail)",
+ "name": "South Florida Regional (res 6 overview / res 7 detail) (res 6 overview / res 7 detail)",
  "note": "Coarsened demo: res 6 overview + res 7 region shards aggregated from the res 7 overview to keep browser memory bounded.",
  "overview": {
   "bytes": 1384031,
@@ -395,6 +396,7 @@
    "lon": -82.199,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444101ffffffff",
    "res": 7
   },
   {
@@ -411,6 +413,7 @@
    "lon": -82.3788,
    "nCells": 337,
    "nPeriods": 23,
+   "region": "8444103ffffffff",
    "res": 7
   },
   {
@@ -427,6 +430,7 @@
    "lon": -81.786,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444105ffffffff",
    "res": 7
   },
   {
@@ -443,6 +447,7 @@
    "lon": -81.9673,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444107ffffffff",
    "res": 7
   },
   {
@@ -459,6 +464,7 @@
    "lon": -82.4122,
    "nCells": 313,
    "nPeriods": 23,
+   "region": "8444109ffffffff",
    "res": 7
   },
   {
@@ -475,6 +481,7 @@
    "lon": -82.5049,
    "nCells": 144,
    "nPeriods": 23,
+   "region": "844410bffffffff",
    "res": 7
   },
   {
@@ -491,6 +498,7 @@
    "lon": -82.0169,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "844410dffffffff",
    "res": 7
   },
   {
@@ -507,6 +515,7 @@
    "lon": -82.4846,
    "nCells": 192,
    "nPeriods": 23,
+   "region": "8444115ffffffff",
    "res": 7
   },
   {
@@ -523,6 +532,7 @@
    "lon": -82.5626,
    "nCells": 26,
    "nPeriods": 23,
+   "region": "8444117ffffffff",
    "res": 7
   },
   {
@@ -539,6 +549,7 @@
    "lon": -82.5734,
    "nCells": 3,
    "nPeriods": 23,
+   "region": "844411dffffffff",
    "res": 7
   },
   {
@@ -555,6 +566,7 @@
    "lon": -81.1442,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444121ffffffff",
    "res": 7
   },
   {
@@ -571,6 +583,7 @@
    "lon": -81.3223,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444123ffffffff",
    "res": 7
   },
   {
@@ -587,6 +600,7 @@
    "lon": -80.7365,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444125ffffffff",
    "res": 7
   },
   {
@@ -603,6 +617,7 @@
    "lon": -80.9122,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444127ffffffff",
    "res": 7
   },
   {
@@ -619,6 +634,7 @@
    "lon": -81.3755,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444129ffffffff",
    "res": 7
   },
   {
@@ -635,6 +651,7 @@
    "lon": -81.5544,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "844412bffffffff",
    "res": 7
   },
   {
@@ -651,6 +668,7 @@
    "lon": -80.9676,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "844412dffffffff",
    "res": 7
   },
   {
@@ -667,6 +685,7 @@
    "lon": -81.9171,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444131ffffffff",
    "res": 7
   },
   {
@@ -683,6 +702,7 @@
    "lon": -82.101,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444133ffffffff",
    "res": 7
   },
   {
@@ -699,6 +719,7 @@
    "lon": -81.502,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444135ffffffff",
    "res": 7
   },
   {
@@ -715,6 +736,7 @@
    "lon": -81.6834,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444137ffffffff",
    "res": 7
   },
   {
@@ -731,6 +753,7 @@
    "lon": -82.1503,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444139ffffffff",
    "res": 7
   },
   {
@@ -747,6 +770,7 @@
    "lon": -82.3348,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "844413bffffffff",
    "res": 7
   },
   {
@@ -763,6 +787,7 @@
    "lon": -81.735,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "844413dffffffff",
    "res": 7
   },
   {
@@ -779,6 +804,7 @@
    "lon": -82.4579,
    "nCells": 40,
    "nPeriods": 23,
+   "region": "8444141ffffffff",
    "res": 7
   },
   {
@@ -795,6 +821,7 @@
    "lon": -82.5263,
    "nCells": 101,
    "nPeriods": 23,
+   "region": "8444143ffffffff",
    "res": 7
   },
   {
@@ -811,6 +838,7 @@
    "lon": -82.0661,
    "nCells": 33,
    "nPeriods": 23,
+   "region": "8444145ffffffff",
    "res": 7
   },
   {
@@ -827,6 +855,7 @@
    "lon": -82.2467,
    "nCells": 339,
    "nPeriods": 23,
+   "region": "8444147ffffffff",
    "res": 7
   },
   {
@@ -843,6 +872,7 @@
    "lon": -81.4275,
    "nCells": 323,
    "nPeriods": 23,
+   "region": "8444161ffffffff",
    "res": 7
   },
   {
@@ -859,6 +889,7 @@
    "lon": -81.6063,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444163ffffffff",
    "res": 7
   },
   {
@@ -875,6 +906,7 @@
    "lon": -81.0225,
    "nCells": 308,
    "nPeriods": 23,
+   "region": "8444165ffffffff",
    "res": 7
   },
   {
@@ -891,6 +923,7 @@
    "lon": -81.1982,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444167ffffffff",
    "res": 7
   },
   {
@@ -907,6 +940,7 @@
    "lon": -81.6436,
    "nCells": 18,
    "nPeriods": 23,
+   "region": "8444169ffffffff",
    "res": 7
   },
   {
@@ -923,6 +957,7 @@
    "lon": -81.8351,
    "nCells": 333,
    "nPeriods": 23,
+   "region": "844416bffffffff",
    "res": 7
   },
   {
@@ -939,6 +974,7 @@
    "lon": -81.2104,
    "nCells": 9,
    "nPeriods": 23,
+   "region": "844416dffffffff",
    "res": 7
   },
   {
@@ -955,6 +991,7 @@
    "lon": -82.5433,
    "nCells": 59,
    "nPeriods": 23,
+   "region": "84441e1ffffffff",
    "res": 7
   },
   {
@@ -971,6 +1008,7 @@
    "lon": -82.2864,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "84441e5ffffffff",
    "res": 7
   },
   {
@@ -987,6 +1025,7 @@
    "lon": -82.4486,
    "nCells": 72,
    "nPeriods": 23,
+   "region": "84441e7ffffffff",
    "res": 7
   },
   {
@@ -1003,6 +1042,7 @@
    "lon": -82.4603,
    "nCells": 235,
    "nPeriods": 23,
+   "region": "84441edffffffff",
    "res": 7
   },
   {
@@ -1019,6 +1059,7 @@
    "lon": -80.1461,
    "nCells": 258,
    "nPeriods": 23,
+   "region": "8444a11ffffffff",
    "res": 7
   },
   {
@@ -1035,6 +1076,7 @@
    "lon": -80.2724,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444a13ffffffff",
    "res": 7
   },
   {
@@ -1051,6 +1093,7 @@
    "lon": -80.0428,
    "nCells": 37,
    "nPeriods": 23,
+   "region": "8444a17ffffffff",
    "res": 7
   },
   {
@@ -1067,6 +1110,7 @@
    "lon": -80.3314,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444a19ffffffff",
    "res": 7
   },
   {
@@ -1083,6 +1127,7 @@
    "lon": -80.5047,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444a1bffffffff",
    "res": 7
   },
   {
@@ -1099,6 +1144,7 @@
    "lon": -80.0662,
    "nCells": 89,
    "nPeriods": 23,
+   "region": "8444a1dffffffff",
    "res": 7
   },
   {
@@ -1115,6 +1161,7 @@
    "lon": -80.0307,
    "nCells": 5,
    "nPeriods": 23,
+   "region": "8444a43ffffffff",
    "res": 7
   },
   {
@@ -1131,6 +1178,7 @@
    "lon": -80.3897,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444a51ffffffff",
    "res": 7
   },
   {
@@ -1147,6 +1195,7 @@
    "lon": -80.5623,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444a53ffffffff",
    "res": 7
   },
   {
@@ -1163,6 +1212,7 @@
    "lon": -80.0924,
    "nCells": 148,
    "nPeriods": 23,
+   "region": "8444a55ffffffff",
    "res": 7
   },
   {
@@ -1179,6 +1229,7 @@
    "lon": -80.179,
    "nCells": 309,
    "nPeriods": 23,
+   "region": "8444a57ffffffff",
    "res": 7
   },
   {
@@ -1195,6 +1246,7 @@
    "lon": -80.6212,
    "nCells": 289,
    "nPeriods": 23,
+   "region": "8444a59ffffffff",
    "res": 7
   },
   {
@@ -1211,6 +1263,7 @@
    "lon": -80.7927,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444a5bffffffff",
    "res": 7
   },
   {
@@ -1227,6 +1280,7 @@
    "lon": -80.2232,
    "nCells": 264,
    "nPeriods": 23,
+   "region": "8444a5dffffffff",
    "res": 7
   },
   {
@@ -1243,6 +1297,7 @@
    "lon": -80.8033,
    "nCells": 198,
    "nPeriods": 23,
+   "region": "8444a89ffffffff",
    "res": 7
   },
   {
@@ -1259,6 +1314,7 @@
    "lon": -80.3866,
    "nCells": 233,
    "nPeriods": 23,
+   "region": "8444a8dffffffff",
    "res": 7
   },
   {
@@ -1275,6 +1331,7 @@
    "lon": -80.8561,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444ac1ffffffff",
    "res": 7
   },
   {
@@ -1291,6 +1348,7 @@
    "lon": -81.0342,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444ac3ffffffff",
    "res": 7
   },
   {
@@ -1307,6 +1365,7 @@
    "lon": -80.4465,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444ac5ffffffff",
    "res": 7
   },
   {
@@ -1323,6 +1382,7 @@
    "lon": -80.6221,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444ac7ffffffff",
    "res": 7
   },
   {
@@ -1339,6 +1399,7 @@
    "lon": -81.0895,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444ac9ffffffff",
    "res": 7
   },
   {
@@ -1355,6 +1416,7 @@
    "lon": -81.2684,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444acbffffffff",
    "res": 7
   },
   {
@@ -1371,6 +1433,7 @@
    "lon": -80.6796,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444acdffffffff",
    "res": 7
   },
   {
@@ -1387,6 +1450,7 @@
    "lon": -81.6354,
    "nCells": 133,
    "nPeriods": 23,
+   "region": "8444ad1ffffffff",
    "res": 7
   },
   {
@@ -1403,6 +1467,7 @@
    "lon": -81.2201,
    "nCells": 166,
    "nPeriods": 23,
+   "region": "8444ad5ffffffff",
    "res": 7
   },
   {
@@ -1419,6 +1484,7 @@
    "lon": -81.8664,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444ad9ffffffff",
    "res": 7
   },
   {
@@ -1435,6 +1501,7 @@
    "lon": -82.0472,
    "nCells": 104,
    "nPeriods": 23,
+   "region": "8444adbffffffff",
    "res": 7
   },
   {
@@ -1451,6 +1518,7 @@
    "lon": -81.449,
    "nCells": 343,
    "nPeriods": 23,
+   "region": "8444addffffffff",
    "res": 7
   },
   {
@@ -1467,6 +1535,7 @@
    "lon": -80.0239,
    "nCells": 4,
    "nPeriods": 23,
+   "region": "8444ae1ffffffff",
    "res": 7
   },
   {
@@ -1483,6 +1552,7 @@
    "lon": -80.0906,
    "nCells": 107,
    "nPeriods": 23,
+   "region": "8444ae3ffffffff",
    "res": 7
   },
   {
@@ -1499,6 +1569,7 @@
    "lon": -80.1168,
    "nCells": 199,
    "nPeriods": 23,
+   "region": "8444ae9ffffffff",
    "res": 7
   },
   {
@@ -1515,6 +1586,7 @@
    "lon": -80.2165,
    "nCells": 337,
    "nPeriods": 23,
+   "region": "8444aebffffffff",
    "res": 7
   },
   {
@@ -1531,6 +1603,7 @@
    "lon": -80.7978,
    "nCells": 2,
    "nPeriods": 23,
+   "region": "84458b3ffffffff",
    "res": 7
   }
  ],

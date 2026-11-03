@@ -156,8 +156,7 @@ input[type=range]{accent-color:var(--accent)}
   <div class="ctl"><label>Year</label><select id="year"></select></div>
   <div class="ctl"><label>Detail</label><select id="resmode">
     <option value="overview" id="resmode-overview">overview</option>
-    <option value="regions" id="resmode-regions">regions</option>
-    <option value="both">both</option></select></div>
+    <option value="regions" id="resmode-regions">regions</option></select></div>
   <div class="ctl"><label>Colour</label><select id="colormode"></select></div>
   <div class="ctl" id="changectl" style="display:none"><label>break by</label>
     <select id="changemetric">
@@ -519,7 +518,7 @@ async function loadYear(year){
   S.manifestBase=manifestURL.slice(0,manifestURL.lastIndexOf('/')+1);
   S.manifestURL=manifestURL;
   const ovRes=(m.overview&&m.overview.res)??'?';
-  const rgRes=m.region_res??'?';
+  const rgRes=m.detail_res??(m.regions&&m.regions[0]&&m.regions[0].res)??'?';
   $('#resmode-overview').textContent=`res ${ovRes} overview`;
   $('#resmode-regions').textContent=`res ${rgRes} regions`;
 
@@ -809,7 +808,7 @@ function recolor(){
     const fc=S.shardFC.get(region);
     if(!fc) continue;
     for(let i=0;i<fc.features.length;i++) fc.features[i].properties.color=col[i];
-    if(S.map && S.map.getSource('rg')) S.map.getSource('rg').setData(S.shardCollection());
+    if(S.map && S.map.getSource('rg')) S.map.getSource('rg').setData(shardCollection());
   }
   $('#perlabel').textContent=periodLabel(S.periodIdx);
   document.querySelectorAll('.btick').forEach(t=>t.classList.toggle('cur',Number(t.dataset.k)===S.periodIdx));
@@ -911,8 +910,8 @@ function dropBasemap(why){
 }
 function applyResMode(){
   if(!S.map||!S.map.getLayer('ov-fill')) return;
-  const showOv = S.resMode==='overview'||S.resMode==='both';
-  const showRg = S.resMode==='regions'||S.resMode==='both';
+  const showOv = S.resMode==='overview';
+  const showRg = S.resMode==='regions';
   S.map.setLayoutProperty('ov-fill','visibility',showOv?'visible':'none');
   S.map.setLayoutProperty('ov-line','visibility',showOv?'visible':'none');
   S.map.setLayoutProperty('rg-fill','visibility',showRg?'visible':'none');
@@ -939,7 +938,7 @@ function visibleRegions(){
     return !(rb[2]<w || rb[0]>e || rb[3]<s || rb[1]>n);
   });
 }
-async function loadVisibleShards(){
+function loadVisibleShards(){
   if(!S.map||!S.mapReady) return;
   // The overview tier is a complete statewide product; detail shards are only
   // needed when the user asks for them.  Loading them in overview mode is what
@@ -950,9 +949,9 @@ async function loadVisibleShards(){
   let loaded=0;
   for(const r of want){
     if(S.shards.has(r.region)) { loaded++; touchShard(r.region); }
-    else ensureShard(r).then(()=>{ recolor(); updateStatus(); }).catch(()=>{});
+    else ensureShard(r).then(scheduleRecolor).catch(e=>console.error('shard load failed', e));
     if(S.derivedManifest && S.derivedManifest.regions && !S.derivedShards.has(r.region))
-      ensureDerivedShard(r).then(()=>{ recolor(); }).catch(()=>{});
+      ensureDerivedShard(r).then(scheduleRecolor).catch(()=>{});
   }
   // LRU: keep a bounded working set so a long pan across the EEZ does not
   // accumulate every res-8 shard in memory.
@@ -971,7 +970,17 @@ function touchShard(region){
   S.shardOrder.push(region);
 }
 
+// Loading 72 shards fires one completion callback each; recomputing and
+// re-uploading the whole detail mesh 72 times is needlessly expensive.  Coalesce
+// those redraws into a single pass.
+let recolorTimer=null;
+function scheduleRecolor(){
+  if(recolorTimer) return;
+  recolorTimer=setTimeout(()=>{ recolorTimer=null; recolor(); updateStatus(); }, 150);
+}
+
 async function ensureShard(r){
+  if(!r.region) throw new Error(`region shard ${r.file} has no region id`);
   if(S.pending.has(r.region)) return S.pending.get(r.region);
   const p=(async()=>{
     const gz=await fetchBytes(payloadURL(r));
@@ -980,8 +989,6 @@ async function ensureShard(r){
     S.shards.set(r.region, block);
     S.shardFC.set(r.region, featuresFor(block));
     touchShard(r.region);
-    if(S.map && S.map.getSource('rg')) S.map.getSource('rg').setData(shardCollection());
-    updateStatus();
     return block;
   })();
   S.pending.set(r.region,p);
@@ -1012,9 +1019,19 @@ async function ensureDerivedShard(r){
 function updateStatus(){
   const el=$('#status');
   if(!el) return;
-  const want=visibleRegions();
   const el2=$('#extremes');
   el2.style.display = isChangeMode() ? 'block' : 'none';
+  const ovRes=(S.manifest&&S.manifest.overview&&S.manifest.overview.res)??'?';
+  const rgRes=(S.manifest&&(S.manifest.detail_res??(S.manifest.regions&&S.manifest.regions[0]&&S.manifest.regions[0].res)))??'?';
+  if(S.resMode==='overview'){
+    const n=S.overview?S.overview.nCells:0;
+    el.innerHTML=`<h3>overview</h3>
+      <div style="color:var(--muted);font-size:10.5px;line-height:1.5">
+        res ${ovRes} statewide layer (${n.toLocaleString()} cells).<br>
+        Switch Detail to <b>res ${rgRes} regions</b> for finer cells.</div>`;
+    return;
+  }
+  const want=visibleRegions();
   if(!want.length){ el.innerHTML='<h3>regions</h3><div style="color:var(--muted)">none in view</div>'; return; }
   const rows=want.map(r=>{
     const st = S.shards.has(r.region) ? 'loaded'
@@ -1032,7 +1049,7 @@ function updateStatus(){
     : '';
   el.innerHTML=`<h3>regions <span style="float:right;font-weight:400">${loaded}/${want.length}</span></h3>${rows}
     <div style="color:var(--muted);font-size:10.5px;margin-top:6px">
-      ${S.manifest.regions.length} region shards at res ${S.manifest.region_res}; loaded on demand${derived}.</div>`;
+      ${S.manifest.regions.length} region shards at res ${rgRes}; loaded on demand${derived}.</div>`;
 }
 
 
@@ -1178,10 +1195,10 @@ function buildLegend(){
   }
   const n7=S.overview?S.overview.nCells:0;
   const ovRes=(S.manifest&&S.manifest.overview&&S.manifest.overview.res)??'?';
-  const rgRes=(S.manifest&&S.manifest.region_res)??'?';
+  const rgRes=(S.manifest&&(S.manifest.detail_res??(S.manifest.regions&&S.manifest.regions[0]&&S.manifest.regions[0].res)))??'?';
   html+=`<div class="hintline" style="margin-top:7px;border-top:1px solid var(--line);padding-top:6px">
     ${S.resMode==='overview'?`res ${ovRes} overview (${n7.toLocaleString()} cells)`:
-      S.resMode==='regions'?`res ${rgRes} region shards`:`res ${ovRes} overview + res ${rgRes} shards`}
+      `res ${rgRes} region shards`}
     ${S.entry&&S.entry.demo?'<br><span style="color:var(--warn)">demo product: old South Florida bbox</span>':''}</div>`;
   el.innerHTML=html;
 }
@@ -1535,8 +1552,9 @@ function bind(){
 /* ---------------------------------------------------------------- url state */
 function applyURLState(){
   const res=PARAMS.get('res');
-  if(res&&['overview','regions','both'].includes(res)){
-    S.resMode=res; $('#resmode').value=res;
+  const resMode = res==='both' ? 'regions' : res;
+  if(resMode&&['overview','regions'].includes(resMode)){
+    S.resMode=resMode; $('#resmode').value=resMode;
   }
   const mode=PARAMS.get('mode');
   if(mode&&[...$('#colormode').options].some(o=>o.value===mode)){
