@@ -255,6 +255,10 @@ const S={
 };
 const MAX_SHARDS = 24;
 let FC7 = { type: 'FeatureCollection', features: [] };
+// Which render key each source currently holds, so switching tiers or changing
+// the period does not re-upload an unchanged mesh.
+const painted = {ov:null, rg:null};
+let prefetchStarted=false, prefetchTimer=null, prefetchToken=0;
 
 
 /* ---------------------------------------------------------------- palettes */
@@ -508,6 +512,11 @@ function showBootError(err){
 
 async function loadYear(year){
   setLoading(`loading ${year} manifest`);
+  // Cancel any prefetch belonging to the old year and suppress new work until
+  // this year's overview is on screen.
+  clearTimeout(prefetchTimer);
+  prefetchToken++;
+  prefetchStarted=true;
   const entry=S.catalog.years[String(year)];
   if(!entry) throw new Error(`year ${year} is not in the catalog`);
   S.entry=entry;
@@ -533,6 +542,7 @@ async function loadYear(year){
   // Reset per-year state before loading the new overview.
   S.overview=null;
   S.shards.clear(); S.shardFC.clear(); S.shardOrder=[]; S.pending.clear();
+  painted.ov=null; painted.rg=null;
   S.derivedOverview=null; S.derivedShards.clear(); S.derivedPending.clear();
   S.derivedManifest=null;
   if(S.map){
@@ -576,6 +586,12 @@ async function loadYear(year){
     if(blockFor(id)) selectCell(id,'ov');
   }
   setTimeout(()=>{const h=$('#hint'); if(h) h.style.opacity=0;}, 9000);
+  // Warm the detail tier in the background so the first Detail switch does not
+  // have to fetch 72 shards from scratch.  The overview is already interactive,
+  // and slow/metered connections are left alone.
+  prefetchStarted=false;
+  clearTimeout(prefetchTimer);
+  prefetchTimer=setTimeout(prefetchDetailShards, 1200);
 }
 
 async function loadDerivedManifest(){
@@ -797,23 +813,51 @@ function coloursFor(block, periodIdx, derivedBlock){
 }
 
 
-function recolor(){
-  if(!S.overview) return;
-  const col7=coloursFor(S.overview, S.periodIdx, S.derivedOverview);
-  for(let i=0;i<FC7.features.length;i++) FC7.features[i].properties.color=col7[i];
-  if(S.map && S.map.getSource('ov')) S.map.getSource('ov').setData(FC7);
-
+function colorKey(){
+  return `${S.mode}|${S.baselineIdx}|${S.changeMetric}|${S.season}|${S.periodIdx}`;
+}
+function paintDetail(key=colorKey()){
   for(const [region,block] of S.shards){
     const col=coloursFor(block, S.periodIdx, S.derivedShards.get(region));
     const fc=S.shardFC.get(region);
     if(!fc) continue;
     for(let i=0;i<fc.features.length;i++) fc.features[i].properties.color=col[i];
-    if(S.map && S.map.getSource('rg')) S.map.getSource('rg').setData(shardCollection());
+  }
+  if(S.shards.size && S.map && S.map.getSource('rg')){
+    S.map.getSource('rg').setData(shardCollection());
+    painted.rg=key;
+    return true;
+  }
+  return false;
+}
+
+function recolor(){
+  if(!S.overview) return;
+  const key=colorKey();
+  // Only repaint the tier that is actually visible.  In particular, recolouring
+  // every loaded shard while the overview is on screen used to re-upload the
+  // whole detail mesh once per shard, which made colour changes very slow.
+  if(S.resMode==='overview'){
+    if(painted.ov!==key){
+      const col7=coloursFor(S.overview, S.periodIdx, S.derivedOverview);
+      for(let i=0;i<FC7.features.length;i++) FC7.features[i].properties.color=col7[i];
+      if(S.map && S.map.getSource('ov')) S.map.getSource('ov').setData(FC7);
+      painted.ov=key;
+    }
+  }else if(painted.rg!==key){
+    paintDetail(key);
   }
   $('#perlabel').textContent=periodLabel(S.periodIdx);
   document.querySelectorAll('.btick').forEach(t=>t.classList.toggle('cur',Number(t.dataset.k)===S.periodIdx));
   document.querySelectorAll('.mseg').forEach(t=>t.classList.toggle('cur',Number(t.dataset.k)===curMonthKey()));
   if(isChangeMode()) buildExtremes();
+}
+
+// Upload the already-coloured detail mesh while it is hidden, so switching to
+// the detail tier is just a visibility toggle on the critical path.
+function warmDetailLayer(){
+  if(S.resMode!=='overview' || !S.shards.size) return;
+  if(painted.rg!==colorKey()) paintDetail();
 }
 
 function periodLabel(i){
@@ -961,6 +1005,7 @@ function loadVisibleShards(){
     S.shards.delete(region);
     S.shardFC.delete(region);
     S.shardOrder=S.shardOrder.filter(x=>x!==region);
+    painted.rg=null;
   }
   updateStatus();
 }
@@ -968,6 +1013,36 @@ function loadVisibleShards(){
 function touchShard(region){
   S.shardOrder=S.shardOrder.filter(x=>x!==region);
   S.shardOrder.push(region);
+}
+
+// Idle-time prefetch of the visible detail shards.  It only fills the cache and
+// pre-paints the hidden detail layer; the overview stays interactive throughout.
+function prefetchDetailShards(){
+  if(prefetchStarted || S.resMode!=='overview' || !S.map) return;
+  const conn=navigator.connection;
+  if(conn && (conn.saveData || /(2g|3g)$/.test(conn.effectiveType||''))) return;
+  prefetchStarted=true;
+  const token=prefetchToken;
+  const queue=visibleRegions().filter(r=>!S.shards.has(r.region));
+  if(!queue.length){ if(token===prefetchToken) warmDetailLayer(); return; }
+  let i=0, active=0, done=0;
+  const next=()=>{
+    if(token!==prefetchToken) return;
+    while(active<4 && i<queue.length){
+      const r=queue[i++];
+      active++;
+      ensureShard(r)
+        .then(()=>{ if(token===prefetchToken && S.resMode!=='overview') scheduleRecolor(); })
+        .catch(()=>{})
+        .finally(()=>{
+          active--; done++;
+          if(token!==prefetchToken) return;
+          if(done===queue.length) warmDetailLayer();
+          next();
+        });
+    }
+  };
+  next();
 }
 
 // Loading 72 shards fires one completion callback each; recomputing and
@@ -981,6 +1056,7 @@ function scheduleRecolor(){
 
 async function ensureShard(r){
   if(!r.region) throw new Error(`region shard ${r.file} has no region id`);
+  if(!S.manifest || !S.manifest.regions || !S.manifest.regions.includes(r)) return null; // stale year
   if(S.pending.has(r.region)) return S.pending.get(r.region);
   const p=(async()=>{
     const gz=await fetchBytes(payloadURL(r));
@@ -989,6 +1065,7 @@ async function ensureShard(r){
     S.shards.set(r.region, block);
     S.shardFC.set(r.region, featuresFor(block));
     touchShard(r.region);
+    painted.rg=null;
     return block;
   })();
   S.pending.set(r.region,p);
@@ -1010,6 +1087,7 @@ async function ensureDerivedShard(r){
     const raw=await gunzip(gz);
     const block=decodeBlock(raw.buffer.slice(raw.byteOffset,raw.byteOffset+raw.byteLength));
     S.derivedShards.set(r.region, block);
+    painted.ov=null; painted.rg=null;
     return block;
   })();
   S.derivedPending.set(r.region,p);
@@ -1520,6 +1598,7 @@ function bind(){
     S.resMode=e.target.value;
     applyResMode();
     if(S.resMode!=='overview') loadVisibleShards();
+    recolor();
     buildLegend(); syncURL();
   };
   $('#season').onchange=e=>{ S.season=e.target.value; buildTimeline(); recolor(); syncURL(); };
