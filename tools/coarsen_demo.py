@@ -110,7 +110,8 @@ def _make_block(ids, lon, lat, area, fields, observed, valid_fraction,
 
 
 def _entry(path: Path, res: int, n_cells: int, n_periods: int,
-           lon: np.ndarray, lat: np.ndarray, bbox: bool = False) -> dict:
+           lon: np.ndarray, lat: np.ndarray, bbox: bool = False,
+           region: str | None = None) -> dict:
     entry = {
         "res": int(res),
         "nCells": int(n_cells),
@@ -119,6 +120,8 @@ def _entry(path: Path, res: int, n_cells: int, n_periods: int,
         "bytes": int(path.stat().st_size),
         "hash": compute_content_hash(path.read_bytes()),
     }
+    if region is not None:
+        entry["region"] = region
     if bbox:
         entry["lon"] = round(float(lon.mean()), 4)
         entry["lat"] = round(float(lat.mean()), 4)
@@ -140,7 +143,7 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
         raise SystemExit(f"source overview bundle not found: {source}")
 
     desc, arrays = read_block(str(source))
-    source_res = int(desc.get("resolution", manifest["overview"].get("res", 7)))
+    source_res = h3.get_resolution(desc["ids"][0])
     if source_res != detail_res:
         raise SystemExit(
             f"source overview is res {source_res} but detail target is "
@@ -238,7 +241,8 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
         path = Path(info["path"])
         written.add(path.name)
         regions.append(_entry(
-            path, detail_res, len(sel), n_periods, lon[sel], lat[sel], bbox=True,
+            path, detail_res, len(sel), n_periods, lon[sel], lat[sel],
+            bbox=True, region=parent,
         ))
 
     # --- manifest ---
@@ -247,6 +251,7 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
         f"(res {overview_res} overview / res {detail_res} detail)"
     )
     manifest["overview_res"] = int(overview_res)
+    manifest["detail_res"] = int(detail_res)
     manifest["region_res"] = int(region_res)
     manifest["overview"] = _entry(
         overview_path, overview_res, n_parents, n_periods, ov_lon, ov_lat,
