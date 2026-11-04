@@ -123,6 +123,9 @@ input[type=range]{accent-color:var(--accent)}
 .rseg.dim{opacity:.2}
 .riblabels{display:flex;gap:2px;font-size:9px;color:var(--muted)}.riblabels div{flex:1;text-align:center}
 .chart{width:100%;height:auto;display:block}
+.chartkey{display:flex;gap:10px;flex-wrap:wrap;margin:3px 0 2px;font-size:9.5px;color:var(--muted)}
+.chartkey span{display:inline-flex;align-items:center;gap:4px}
+.chartkey i{display:inline-block;width:8px;height:8px;border-radius:50%}
 .heatleg{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;font-size:9.5px;color:var(--muted)}
 .heatleg .hlbar{display:flex;height:9px;border-radius:2px;overflow:hidden}
 .heatleg .hlbar i{display:block;width:13px;height:9px}
@@ -163,6 +166,8 @@ input[type=range]{accent-color:var(--accent)}
       <option value="date">break date</option>
       <option value="magnitude">break size</option>
       <option value="score">break strength</option></select></div>
+  <div class="ctl" id="analysisidxctl" style="display:none"><label>fit index</label>
+    <select id="analysisidx"></select></div>
   <div class="ctl"><label>Season</label><select id="season">
     <option value="all">whole year</option>
     <option value="wet">wet (May–Oct)</option>
@@ -248,6 +253,7 @@ const S={
   resMode:'overview',
   mode:'ndvi',
   changeMetric:'date',
+  analysisIdx:'ndvi',
   periodIdx:0, baselineIdx:0,
   opacity:85, satellite:true, selected:null,
   playing:false, timer:null, speed:900,
@@ -269,6 +275,11 @@ const RAMPS={
   diff:[[40,90,170],[120,160,190],[236,236,232],[240,180,110],[180,50,50]],
   frac:[[25,28,36],[45,80,80],[70,150,110],[120,200,140],[200,240,180]],
   stab:[[38,158,140],[120,200,182],[240,222,168],[232,150,78],[198,66,66]],
+  // cyclic year: Jan blue -> summer green/gold -> autumn red/violet -> Dec
+  // blue again. The wrap is intentional; the legend says so.
+  phase:[[70,110,200],[80,150,190],[90,190,160],[130,210,110],[200,220,90],
+         [235,190,80],[235,150,70],[225,110,75],[200,90,100],[170,90,130],
+         [130,95,160],[90,100,180],[70,110,200]],
   // break timing: early -> late across the year
   time:[[58,76,150],[86,150,180],[140,196,150],[222,196,104],[226,128,86],[196,64,86]]
 };
@@ -290,6 +301,16 @@ function spec(k){ return (S.manifest.index_specs||{})[k]||{}; }
 function idxRange(k){ const r=spec(k).range; return r||[-1,1]; }
 function idxRamp(k){ const dom=spec(k).domain; return RAMPS[DOMAIN_RAMP[dom]||'veg']; }
 function idxLabel(k){ return spec(k).label||k.toUpperCase(); }
+function analysisSpecs(){
+  return (S.manifest&&S.manifest.analysis)
+      || (S.derivedManifest&&S.derivedManifest.analysis)
+      || [];
+}
+function analysisSpec(key){
+  return analysisSpecs().find(a=>a.key===key)||{};
+}
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function monthName(m){ return MONTHS[clamp(Math.round(m)-1,0,11)]; }
 
 const BAND_COLORS = {blue:'#4d8dfa',green:'#31c275',red:'#f4574f',nir:'#e8499f',swir1:'#b25ff0',swir2:'#5f7cf2'};
 function bandColor(b){ return BAND_COLORS[b]||'#9aa4bb'; }
@@ -620,32 +641,73 @@ async function loadDerivedOverview(){
   }
 }
 
+function isAnalysisMode(){
+  return S.mode.startsWith('analysis:')||S.mode==='stability'||S.mode==='mean';
+}
+function updateModeControls(){
+  const ch=$('#changectl'), ai=$('#analysisidxctl');
+  if(ch) ch.style.display=S.mode==='change'?'':'none';
+  if(ai) ai.style.display=isAnalysisMode()?'':'none';
+}
+
 function setupModes(){
   const m=S.manifest;
   const sel=$('#colormode'); sel.innerHTML='';
+  const groups={};
   const add=(val,label,group)=>{
     const o=document.createElement('option');
     o.value=val; o.textContent=label;
-    if(group){ const g=document.createElement('optgroup'); g.label=group; sel.appendChild(g); }
-    else sel.appendChild(o);
+    if(group){
+      if(!groups[group]){
+        groups[group]=document.createElement('optgroup');
+        groups[group].label=group;
+        sel.appendChild(groups[group]);
+      }
+      groups[group].appendChild(o);
+    }else sel.appendChild(o);
   };
   for(const k of m.indices) add(k, idxLabel(k));
   add('delta','change vs baseline');
   for(const b of m.bands) add('band:'+b, `reflectance · ${b}`, 'reflectance');
 
+  const specs=analysisSpecs();
+  if(specs.length){
+    const g=document.createElement('optgroup'); g.label='trend · season · residuals';
+    for(const a of specs){
+      const o=document.createElement('option');
+      o.value='analysis:'+a.key; o.textContent=a.label;
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+
   const derived = S.derivedManifest || overviewHasChange();
   if(derived){
     const g=document.createElement('optgroup'); g.label='whole record / change';
-    for(const [val,label] of [['change','detected break'],['trend','NDVI trend'],
-        ['stability','NDVI stability'],['mean','record mean NDVI']]){
+    for(const [val,label] of [['change','detected break'],
+        ['stability','record variability'],['mean','record mean']]){
       const o=document.createElement('option'); o.value=val; o.textContent=label;
       g.appendChild(o);
     }
     sel.appendChild(g);
   }
   if(![...sel.options].some(o=>o.value===S.mode)) S.mode='ndvi';
+
+  const asel=$('#analysisidx'); asel.innerHTML='';
+  for(const k of m.indices){
+    const o=document.createElement('option'); o.value=k; o.textContent=idxLabel(k);
+    asel.appendChild(o);
+  }
+  if(!m.indices.includes(S.analysisIdx))
+    S.analysisIdx=m.indices.includes('ndvi')?'ndvi':m.indices[0];
+  asel.value=S.analysisIdx;
+  asel.onchange=()=>{ S.analysisIdx=asel.value; recolor(); buildLegend();
+    if(S.selected) renderInspector(S.selected); syncURL(); };
+
   sel.value=S.mode;
-  sel.onchange=()=>{ S.mode=sel.value; $('#changectl').style.display=S.mode==='change'?'':'none'; recolor(); buildLegend(); syncURL(); };
+  sel.onchange=()=>{ S.mode=sel.value; updateModeControls(); recolor();
+    buildLegend(); if(S.selected) renderInspector(S.selected); syncURL(); };
+  updateModeControls();
 }
 
 function overviewHasChange(){
@@ -686,13 +748,13 @@ function featuresFor(block){
 
 /* ---------------------------------------------------------------- colours */
 function isChangeMode(){ return S.mode==='change'; }
-function isDerivedMode(){ return ['change','trend','stability','mean'].includes(S.mode); }
+function isDerivedMode(){ return S.mode==='change'||isAnalysisMode(); }
 
 function derivedFor(block){
   if(!block) return null;
   if(block===S.overview) return S.derivedOverview;
-  for(const [region,d] of S.derivedShards){
-    if(d.ids===block.ids) return d;
+  for(const [,d] of S.derivedShards){
+    if(d.ids.length===block.ids.length && d.ids[0]===block.ids[0]) return d;
   }
   return null;
 }
@@ -735,35 +797,44 @@ function changeColours(block, derivedBlock){
 function derivedFieldColours(block, derivedBlock){
   const n=block.nCells;
   const col=new Array(n).fill(NODATA);
-  if(!derivedBlock||!derivedBlock.cell) return col;
-  if(S.mode==='trend'){
-    const vals=derivedBlock.cell.trend_slope;
-    let m=0;
-    for(let c=0;c<n;c++){ const v=Math.abs(vals[c]); if(isFinite(v)&&v>m) m=v; }
+  const D=derivedBlock||block;
+  const cell=D&&D.cell;
+  if(!cell) return col;
+  const idx=S.analysisIdx;
+  if(S.mode==='mean'){
+    const vals=cell[`mean.${idx}`]||cell.ndvi_mean;
+    if(!vals) return col;
+    const r=idxRange(idx);
     for(let c=0;c<n;c++){
       const v=vals[c];
-      col[c]=isFinite(v)&&m>0 ? rampColor(v/m*0.5+0.5, RAMPS.diff) : NODATA;
+      col[c]=isFinite(v)?rampColor((v-r[0])/(r[1]-r[0]),idxRamp(idx)):NODATA;
     }
   }else if(S.mode==='stability'){
-    const vals=derivedBlock.cell.ndvi_std;
+    const vals=cell[`std.${idx}`]||cell.ndvi_std;
+    if(!vals) return col;
     let lo=Infinity, hi=-Infinity;
     for(let c=0;c<n;c++){ const v=vals[c]; if(isFinite(v)){ if(v<lo)lo=v; if(v>hi)hi=v; } }
     for(let c=0;c<n;c++){
       const v=vals[c];
       col[c]=isFinite(v)&&hi>lo ? rampColor((v-lo)/(hi-lo), RAMPS.stab) : NODATA;
     }
-  }else{ // mean
-    const vals=derivedBlock.cell.ndvi_mean;
+  }else if(S.mode.startsWith('analysis:')){
+    const key=S.mode.slice('analysis:'.length);
+    const sp=analysisSpec(key);
+    const vals=cell[`${key}.${idx}`];
+    if(!vals) return col;
+    const [lo,hi]=sp.range||[0,1];
+    const ramp=RAMPS[sp.ramp]||RAMPS.diff;
     for(let c=0;c<n;c++){
       const v=vals[c];
-      col[c]=isFinite(v) ? rampColor((v+1)/2, RAMPS.veg) : NODATA;
+      col[c]=isFinite(v)?rampColor((v-lo)/(hi-lo),ramp):NODATA;
     }
   }
   return col;
 }
 
 function coloursFor(block, periodIdx, derivedBlock){
-  const key=S.mode+'|'+S.baselineIdx+'|'+S.changeMetric;
+  const key=S.mode+'|'+S.baselineIdx+'|'+S.changeMetric+'|'+S.analysisIdx;
   if(block._cc && block._cc.key===key && !isDerivedMode()) return block._cc.periods[periodIdx];
   const n=block.nCells, P=block.periods.length;
   const periods=[];
@@ -814,7 +885,7 @@ function coloursFor(block, periodIdx, derivedBlock){
 
 
 function colorKey(){
-  return `${S.mode}|${S.baselineIdx}|${S.changeMetric}|${S.season}|${S.periodIdx}`;
+  return `${S.mode}|${S.baselineIdx}|${S.changeMetric}|${S.analysisIdx}|${S.season}|${S.periodIdx}`;
 }
 function paintDetail(key=colorKey()){
   for(const [region,block] of S.shards){
@@ -850,7 +921,8 @@ function recolor(){
   $('#perlabel').textContent=periodLabel(S.periodIdx);
   document.querySelectorAll('.btick').forEach(t=>t.classList.toggle('cur',Number(t.dataset.k)===S.periodIdx));
   document.querySelectorAll('.mseg').forEach(t=>t.classList.toggle('cur',Number(t.dataset.k)===curMonthKey()));
-  if(isChangeMode()) buildExtremes();
+  if(isChangeMode()||S.mode.startsWith('analysis:')) buildExtremes();
+  else { const ex=$('#extremes'); if(ex) ex.style.display='none'; }
 }
 
 // Upload the already-coloured detail mesh while it is hidden, so switching to
@@ -1098,7 +1170,7 @@ function updateStatus(){
   const el=$('#status');
   if(!el) return;
   const el2=$('#extremes');
-  el2.style.display = isChangeMode() ? 'block' : 'none';
+  el2.style.display = (isChangeMode()||S.mode.startsWith('analysis:')) ? 'block' : 'none';
   const ovRes=(S.manifest&&S.manifest.overview&&S.manifest.overview.res)??'?';
   const rgRes=(S.manifest&&(S.manifest.detail_res??(S.manifest.regions&&S.manifest.regions[0]&&S.manifest.regions[0].res)))??'?';
   if(S.resMode==='overview'){
@@ -1234,23 +1306,33 @@ function buildLegend(){
       <div class="hintline">Harmonic regression with a step-regressor F-scan over
       the whole record.<br>
       Grey cells have no break, or no derived layer is loaded.</div>`;
-  }else if(S.mode==='trend'){
-    html=`<h3>NDVI trend</h3>
-      <div class="ramp" style="background:linear-gradient(90deg,${RAMPS.diff.map(hex).join(',')})"></div>
-      <div class="rlabels"><span>falling</span><span>flat</span><span>rising</span></div>
-      <div class="hintline">Per-cell linear NDVI slope over the whole record,
-      normalised to the largest absolute slope in view.</div>`;
+  }else if(S.mode.startsWith('analysis:')){
+    const key=S.mode.slice('analysis:'.length), sp=analysisSpec(key);
+    const [lo,hi]=sp.range||[0,1];
+    const signed=v=>(v>0?'+':'')+v;
+    const unit=sp.unit||'';
+    const labels=key==='phase' ? ['Jan','Dec']
+      : [signed(lo)+unit, signed(hi)+unit];
+    const extra=key==='phase'
+      ? ' The ramp is cyclic: January and December meet at both ends.'
+      : ` Display span ${signed(lo)} to ${signed(hi)}${unit}; values outside are clipped.`;
+    html=`<h3>${sp.label} &middot; ${idxLabel(S.analysisIdx)}</h3>
+      <div class="ramp" style="background:linear-gradient(90deg,${(RAMPS[sp.ramp]||RAMPS.diff).map(hex).join(',')})"></div>
+      <div class="rlabels"><span>${labels[0]}</span><span>${labels[1]}</span></div>
+      <div class="hintline">${sp.desc||''}${extra}<br>
+      Whole record: the period slider does not change this layer.</div>`;
   }else if(S.mode==='stability'){
-    html=`<h3>NDVI stability</h3>
+    html=`<h3>record variability &middot; ${idxLabel(S.analysisIdx)}</h3>
       <div class="ramp" style="background:linear-gradient(90deg,${RAMPS.stab.map(hex).join(',')})"></div>
       <div class="rlabels"><span>stable</span><span>variable</span></div>
-      <div class="hintline">Record standard deviation of NDVI. High values are
-      cells that changed a lot across the record.</div>`;
+      <div class="hintline">Record standard deviation of ${idxLabel(S.analysisIdx)}. High
+      values are cells that changed a lot across the record.</div>`;
   }else if(S.mode==='mean'){
-    html=`<h3>record mean NDVI</h3>
-      <div class="ramp" style="background:linear-gradient(90deg,${RAMPS.veg.map(hex).join(',')})"></div>
-      <div class="rlabels"><span>&minus;1</span><span>0</span><span>+1</span></div>
-      <div class="hintline">Mean NDVI over every observed bin in the record.</div>`;
+    const r=idxRange(S.analysisIdx);
+    html=`<h3>record mean &middot; ${idxLabel(S.analysisIdx)}</h3>
+      <div class="ramp" style="background:linear-gradient(90deg,${idxRamp(S.analysisIdx).map(hex).join(',')})"></div>
+      <div class="rlabels"><span>${r[0]}</span><span>0</span><span>${r[1]}</span></div>
+      <div class="hintline">Mean ${idxLabel(S.analysisIdx)} over every observed bin in the record.</div>`;
   }else if(S.mode==='delta'){
     html=`<h3>change vs baseline</h3>
       <div class="ramp" style="background:linear-gradient(90deg,${RAMPS.diff.map(hex).join(',')})"></div>
@@ -1282,10 +1364,59 @@ function buildLegend(){
 }
 
 /* ---------------------------------------------------------------- extremes */
+function analysisValue(key,v){
+  if(key==='trend') return (v>=0?'+':'')+v.toFixed(4);
+  if(key==='trendz') return (v>=0?'+':'')+v.toFixed(1)+'\u03c3';
+  if(key==='amp') return v.toFixed(3);
+  if(key==='phase') return monthName(v);
+  if(key==='r2') return v.toFixed(2);
+  if(key==='anom') return v.toFixed(1)+'\u03c3';
+  return String(v);
+}
+
 function buildExtremes(){
   const el=$('#extremes');
-  if(!isChangeMode()){ el.style.display='none'; return; }
+  if(!isChangeMode()&&!S.mode.startsWith('analysis:')){
+    el.style.display='none'; return;
+  }
   el.style.display='block';
+
+  if(S.mode.startsWith('analysis:')){
+    const key=S.mode.slice('analysis:'.length);
+    const sp=analysisSpec(key);
+    const blocks=S.resMode==='overview'
+      ? (S.overview?[S.overview]:[])
+      : [...S.shards.values()];
+    const rows=[];
+    for(const block of blocks){
+      const D=derivedFor(block)||block;
+      const vals=D&&D.cell&&D.cell[`${key}.${S.analysisIdx}`];
+      if(!vals) continue;
+      for(let c=0;c<block.nCells;c++){
+        const v=vals[c];
+        if(!isFinite(v)) continue;
+        rows.push({v, id:block.ids[c], block, c});
+      }
+    }
+    rows.sort(sp.rank==='desc'?(a,b)=>b.v-a.v:(a,b)=>a.v-b.v);
+    const top=rows.slice(0,20);
+    el.innerHTML=`<h3>${sp.rankLabel||sp.label} · ${idxLabel(S.analysisIdx)}
+      <br><span style="font-weight:400;text-transform:none;letter-spacing:0">whole record</span></h3>`+
+      (top.length?top.map((r,n)=>`<div class="ex" data-i="${n}">
+          <span style="color:var(--muted);min-width:15px">${n+1}</span>
+          <span class="nm">${r.id}</span><span class="vl">${analysisValue(key,r.v)}</span></div>`).join('')
+        :'<div style="color:var(--muted)">no fitted cells at this detail</div>');
+    el.querySelectorAll('.ex').forEach(x=>{
+      x.onclick=()=>{
+        const r=top[Number(x.dataset.i)];
+        if(!r) return;
+        selectCell(r.id,S.resMode==='overview'?'ov':'rg');
+        S.map.flyTo({center:[r.block.lon[r.c],r.block.lat[r.c]],zoom:13.5,duration:900});
+      };
+    });
+    return;
+  }
+
   const rows=[];
   const sources=new Map(S.shards);
   for(const [region,block] of S.derivedShards) sources.set(region, block);
@@ -1336,6 +1467,101 @@ function blockFor(id){
   for(const b of S.shards.values()) if(b.ids.includes(id)) return b;
   return null;
 }
+
+/* ---- trend + season fit for one cell -------------------------------- */
+const MIN_FIT_OBS = 8;
+
+function periodTime(p){
+  if(p && p.date){
+    const d=Date.parse(p.date+'T00:00:00Z');
+    const start=Date.UTC(p.year,0,1), end=Date.UTC(p.year+1,0,1);
+    if(isFinite(d)&&end>start) return p.year+(d-start)/(end-start);
+  }
+  const y=Number(p&&p.year||0), m=Number(p&&p.month||6);
+  return y+(m-0.5)/12;
+}
+function periodWet(p){
+  if(p&&p.season) return p.season==='wet'?1:0;
+  return (p&&p.month>=5&&p.month<=10)?1:0;
+}
+/** Gaussian elimination for a 3x3 system; null if singular. */
+function solve3(A,b){
+  const M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<3;c++){
+    let p=c;
+    for(let r=c+1;r<3;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    if(Math.abs(M[p][c])<1e-12) return null;
+    [M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<3;r++){
+      if(r===c) continue;
+      const f=M[r][c]/M[c][c];
+      for(let k=c;k<4;k++) M[r][k]-=f*M[c][k];
+    }
+  }
+  return [M[0][3]/M[0][0], M[1][3]/M[1][1], M[2][3]/M[2][2]];
+}
+function inv3(A){
+  const cols=[];
+  for(let j=0;j<3;j++){
+    const e=[0,0,0]; e[j]=1;
+    const x=solve3(A,e); if(!x) return null;
+    cols.push(x);
+  }
+  return [[cols[0][0],cols[1][0],cols[2][0]],
+          [cols[0][1],cols[1][1],cols[2][1]],
+          [cols[0][2],cols[1][2],cols[2][2]]];
+}
+
+/** Same model as florida_h3.analysis: y = a + b (t - mean t) + s * wet.
+ *  Recomputed for one cell so the chart can draw the fitted values; the map
+ *  layers use the per-cell scalars computed at export time. */
+function fitCell(values, periods){
+  const pts=[], times=periods.map(periodTime);
+  for(let i=0;i<values.length;i++)
+    if(isFinite(values[i])) pts.push({i,v:values[i],t:times[i],w:periodWet(periods[i])});
+  const n=pts.length;
+  if(n<MIN_FIT_OBS) return null;
+  const mt=pts.reduce((a,p)=>a+p.t,0)/n;
+  const A=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
+  for(const p of pts){
+    const x=[1,p.t-mt,p.w];
+    for(let i=0;i<3;i++){
+      b[i]+=x[i]*p.v;
+      for(let j=0;j<3;j++) A[i][j]+=x[i]*x[j];
+    }
+  }
+  const beta=solve3(A,b);
+  if(!beta) return null;
+
+  let sse=0, sy=0;
+  for(const p of pts){
+    const f=beta[0]+beta[1]*(p.t-mt)+beta[2]*p.w;
+    sse+=(p.v-f)**2; sy+=p.v;
+  }
+  const mean=sy/n;
+  let sst=0;
+  for(const p of pts) sst+=(p.v-mean)**2;
+  const df=n-3;
+  const sigma=df>0?Math.sqrt(sse/df):NaN;
+  const inv=inv3(A);
+  const se=inv?Math.sqrt(Math.max(0,sigma*sigma*inv[1][1])):NaN;
+
+  const fitted=new Float64Array(values.length).fill(NaN);
+  let anom=NaN, anomIdx=-1;
+  for(let i=0;i<values.length;i++){
+    const f=beta[0]+beta[1]*(times[i]-mt)+beta[2]*periodWet(periods[i]);
+    fitted[i]=f;
+    if(isFinite(values[i]) && isFinite(sigma) && sigma>1e-12){
+      const z=Math.abs(values[i]-f)/sigma;
+      if(!isFinite(anom) || z>anom){ anom=z; anomIdx=i; }
+    }
+  }
+  return {n, beta, my:mt, times, trend:beta[1], amp:Math.abs(beta[2])/2,
+          phase:beta[2]>=0?8:1, r2:sst>1e-12?1-sse/sst:NaN,
+          se, trendz:se>1e-12?beta[1]/se:NaN, sigma,
+          fitted, anom, anomIdx};
+}
+
 function renderInspector(id){
   const el=$('#insp');
   const B=blockFor(id);
@@ -1343,6 +1569,12 @@ function renderInspector(id){
   el.style.display='block';
   const c=B.ids.indexOf(id);
   const i0=S.periodIdx;
+  const D=derivedFor(B);
+  const A=(D&&D.cell)||B.cell;
+  const Araw=(D&&D.cellraw)||B.cellraw||{};
+  const idx=S.analysisIdx, sp=analysisSpec(idx);
+  const vals=(B.index[idx]||[]).map((row,i)=>B.observed[i][c]?row[c]:NaN);
+  const fit=fitCell(vals,B.periods);
   const obs=[];
   for(let i=0;i<B.periods.length;i++) if(B.observed[i][c]) obs.push(i);
   const ndviAll=B.index.ndvi.map(a=>a[c]);
@@ -1392,7 +1624,6 @@ function renderInspector(id){
     values:B.periods.map((p,i)=>B.band[b][i][c])})));
 
   // ---- change layer ----
-  const D=derivedFor(B);
   const ch=(D&&D.change)||B.change;
   let changeHtml='';
   if(ch){
@@ -1416,19 +1647,52 @@ function renderInspector(id){
         magnitude with the method string beside it.</div>`;
   }
 
+  // ---- trend / season / residual assessment ----
+  let analysisHtml='';
+  if(A||fit){
+    const av=metric=>A&&A[`${metric}.${idx}`]?A[`${metric}.${idx}`][c]:NaN;
+    const trendV=isFinite(av('trend'))?av('trend'):(fit?fit.trend:NaN);
+    const trendzV=isFinite(av('trendz'))?av('trendz'):(fit?fit.trendz:NaN);
+    const ampV=isFinite(av('amp'))?av('amp'):(fit?fit.amp:NaN);
+    const phaseV=isFinite(av('phase'))?av('phase'):(fit?fit.phase:NaN);
+    const r2V=isFinite(av('r2'))?av('r2'):(fit?fit.r2:NaN);
+    const anomV=isFinite(av('anom'))?av('anom'):(fit?fit.anom:NaN);
+    const anomRaw=Araw[`anomp.${idx}`];
+    const anomIdx=anomRaw?anomRaw[c]:(fit?fit.anomIdx:-1);
+    const anomDate=anomIdx>=0&&B.periods[anomIdx]?B.periods[anomIdx].date:'—';
+    const nFit=fit?fit.n:(A&&A.observed_fraction?A.observed_fraction[c]:null);
+    analysisHtml=`<div class="sect">trend &middot; season &middot; residuals &mdash; ${idxLabel(idx)}</div>
+      <div class="grid2">
+        <div class="kv"><span>trend</span><b>${fmt(trendV,4)}/yr</b></div>
+        <div class="kv"><span>significance</span><b>${fmt(trendzV,1)}&sigma;</b></div>
+        <div class="kv"><span>seasonal swing</span><b>&plusmn;${fmt(ampV,3)}</b></div>
+        <div class="kv"><span>peak season</span><b>${isFinite(phaseV)?monthName(phaseV):'—'}</b></div>
+        <div class="kv"><span>fit R&sup2;</span><b>${fmt(r2V,2)}</b></div>
+        <div class="kv"><span>largest anomaly</span><b>${fmt(anomV,1)}&sigma;</b></div>
+        <div class="kv"><span>anomaly bin</span><b>${anomDate}</b></div>
+        <div class="kv"><span>bins in fit</span><b>${nFit==null?'—':(typeof nFit==='number'?Math.round(nFit):nFit)}</b></div>
+      </div>
+      <div class="sub" style="margin:5px 0 0;font-size:10.5px">${sp.desc||''}
+        The fit is one trend plus a wet/dry offset through the whole record.</div>
+      ${fit?decompositionChart(vals,B.periods,fit):'<div style="color:var(--muted);margin-top:6px">not enough observed bins to fit this cell</div>'}`;
+  }
+
   // ---- whole-record summary ----
   let derivedHtml='';
-  if(D&&D.cell){
-    const cell=D.cell;
-    const raw=D.cellraw||{};
+  if(A){
+    const cell=A;
+    const raw=Araw;
+    const meanV=cell[`mean.${idx}`]||cell.ndvi_mean;
+    const stdV=cell[`std.${idx}`]||cell.ndvi_std;
+    const scenes=obs.reduce((s,i)=>s+(B.nObs[i][c]||0),0);
     derivedHtml=`<div class="sect">whole-record summary</div>
       <div class="grid2">
-        <div class="kv"><span>NDVI trend</span><b>${fmt(cell.trend_slope[c],4)}/yr</b></div>
-        <div class="kv"><span>record mean</span><b>${fmt(cell.ndvi_mean[c],3)}</b></div>
-        <div class="kv"><span>stability (σ)</span><b>${fmt(cell.ndvi_std[c],3)}</b></div>
-        <div class="kv"><span>observed</span><b>${fmt(cell.observed_fraction[c],2)}</b></div>
-        <div class="kv"><span>bins used</span><b>${raw.n_bins?raw.n_bins[c]:'—'}</b></div>
-        <div class="kv"><span>scenes total</span><b>${raw.n_obs_total?raw.n_obs_total[c]:'—'}</b></div>
+        <div class="kv"><span>mean ${idxLabel(idx)}</span><b>${fmt(meanV?meanV[c]:NaN,3)}</b></div>
+        <div class="kv"><span>variability (&sigma;)</span><b>${fmt(stdV?stdV[c]:NaN,3)}</b></div>
+        <div class="kv"><span>observed</span><b>${fmt(obs.length/B.periods.length,2)}</b></div>
+        <div class="kv"><span>bins used</span><b>${fit?fit.n:obs.length}</b></div>
+        <div class="kv"><span>scenes total</span><b>${scenes||'—'}</b></div>
+        <div class="kv"><span>record</span><b>${B.periods.length} bins</b></div>
       </div>`;
   }
 
@@ -1451,6 +1715,7 @@ function renderInspector(id){
       <div class="kv"><span>scenes per pixel</span><b>${B.nObs[i0][c]}</b></div>
       <div class="kv"><span>valid fraction</span><b>${fmt(B.validFraction[i0][c],2)}</b></div>
     </div>
+    ${analysisHtml}
     ${changeHtml}
     ${derivedHtml}
 
@@ -1592,6 +1857,84 @@ function spectrumProfile(bands){
   return `<svg class="chart spec" viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 
+/* Trend + season fit, residual scatter.  Decimal-year x so the single-year
+   record still shows a slope; the fitted line is the seasonal model plus the
+   trend, the dashed line is the trend alone. */
+function decompositionChart(values, periods, fit){
+  const n=values.length;
+  const seen=[];
+  for(let i=0;i<n;i++) if(isFinite(values[i])) seen.push(i);
+  if(!n||!seen.length) return '<div style="color:var(--muted)">no observations</div>';
+  const W=400, PL=43, PR=10, PT=12, PB=31, H=164;
+  const pool=seen.map(i=>values[i]);
+  if(fit) for(let i=0;i<n;i++) if(isFinite(fit.fitted[i])) pool.push(fit.fitted[i]);
+  let lo=Math.min(...pool), hi=Math.max(...pool);
+  if(hi-lo<1e-6){ lo-=0.02; hi+=0.02; }
+  const pad=(hi-lo)*0.10, ylo=lo-pad, yhi=hi+pad;
+  const X=i=>PL+(n>1?i/(n-1):0)*(W-PL-PR);
+  const Y=v=>PT+(yhi-v)/(yhi-ylo)*(H-PT-PB);
+  const time=periods.map(periodTime);
+  const multiYear=new Set(periods.map(p=>p.year)).size>1;
+  let g='';
+  for(let i=0;i<=4;i++){
+    const v=ylo+(yhi-ylo)*i/4, y=Y(v);
+    g+=`<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="#2a3040"/>`;
+    g+=`<text x="${PL-4}" y="${(y+3).toFixed(1)}" fill="#98a2b8" font-size="8" text-anchor="end">${v.toFixed(2)}</text>`;
+  }
+  const stride=Math.max(1,Math.ceil(n/6));
+  for(let i=0;i<n;i+=stride){
+    const label=multiYear?periods[i].date.slice(2,7):periods[i].date.slice(5);
+    g+=`<text x="${X(i).toFixed(1)}" y="${H-PB+12}" fill="#98a2b8" font-size="7.3" text-anchor="middle">${label}</text>`;
+  }
+  if((n-1)%stride){
+    const i=n-1, label=multiYear?periods[i].date.slice(2,7):periods[i].date.slice(5);
+    g+=`<text x="${X(i).toFixed(1)}" y="${H-PB+12}" fill="#98a2b8" font-size="7.3" text-anchor="middle">${label}</text>`;
+  }
+
+  let fitted='', trend='';
+  for(let i=0;i<n;i++){
+    const f=fit.fitted[i];
+    if(!isFinite(f)) continue;
+    fitted+=(fitted?' L':'M')+X(i).toFixed(1)+' '+Y(f).toFixed(1);
+    const t=fit.beta[0]+fit.beta[1]*(fit.times[i]-fit.my);
+    trend+=(trend?' L':'M')+X(i).toFixed(1)+' '+Y(t).toFixed(1);
+  }
+  g+=`<path d="${trend}" fill="none" stroke="#d08adf" stroke-width="1.1"
+        stroke-dasharray="4 3" opacity="0.95"/>`;
+  g+=`<path d="${fitted}" fill="none" stroke="#7fd4c1" stroke-width="1.6" opacity="0.95"/>`;
+
+  for(let i=0;i<n;i++){
+    const v=values[i];
+    if(!isFinite(v)) continue;
+    const z=isFinite(fit.sigma)&&fit.sigma>1e-12?Math.abs(v-fit.fitted[i])/fit.sigma:0;
+    const out=z>3;
+    g+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${out?2.8:2.1}"
+          fill="${out?'#ef8354':'#cdd6e6'}" stroke="#12141a" stroke-width="0.6">
+          <title>${periods[i].date} · observed ${fmt(v,4)} · fitted ${fmt(fit.fitted[i],4)}${out?` · residual ${z.toFixed(1)}σ`:''}</title></circle>`;
+    if(out)
+      g+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5.4"
+            fill="none" stroke="#ef8354" stroke-width="0.8" opacity="0.7"/>`;
+  }
+  if(fit.anomIdx>=0 && isFinite(values[fit.anomIdx])){
+    const x=X(fit.anomIdx), y=Y(values[fit.anomIdx]);
+    g+=`<line x1="${x.toFixed(1)}" y1="${(y-8).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y-13).toFixed(1)}"
+          stroke="#ef8354" stroke-width="1"/>
+        <text x="${x.toFixed(1)}" y="${(y-16).toFixed(1)}" fill="#ef8354" font-size="7.5"
+          text-anchor="middle">${fit.anom.toFixed(1)}σ</text>`;
+  }
+  if(S.periodIdx>=0 && S.periodIdx<n)
+    g+=`<line x1="${X(S.periodIdx).toFixed(1)}" y1="${PT}" x2="${X(S.periodIdx).toFixed(1)}"
+          y2="${H-PB}" stroke="#fff" stroke-width="0.9" opacity="0.55" stroke-dasharray="2 3"/>`;
+
+  return `<svg class="chart decomp" viewBox="0 0 ${W} ${H}">${g}</svg>
+    <div class="chartkey">
+      <span><i style="background:#cdd6e6"></i>observed</span>
+      <span><i style="background:#7fd4c1"></i>seasonal fit</span>
+      <span><i style="background:#d08adf"></i>trend</span>
+      <span><i style="background:#ef8354"></i>residual &gt;3&sigma;</span>
+    </div>`;
+}
+
 /* ---------------------------------------------------------------- controls */
 function bind(){
   $('#resmode').onchange=e=>{
@@ -1643,6 +1986,10 @@ function applyURLState(){
   if(metric&&['date','magnitude','score'].includes(metric)){
     S.changeMetric=metric; $('#changemetric').value=metric;
   }
+  const idx=PARAMS.get('idx');
+  if(idx && [...$('#analysisidx').options].some(o=>o.value===idx)){
+    S.analysisIdx=idx; $('#analysisidx').value=idx;
+  }
   const season=PARAMS.get('season');
   if(season&&['all','wet','dry'].includes(season)){
     S.season=season; $('#season').value=season;
@@ -1657,7 +2004,7 @@ function applyURLState(){
   if(isFinite(op)&&op>=15&&op<=100){
     S.opacity=op; $('#opacity').value=String(op);
   }
-  $('#changectl').style.display=S.mode==='change'?'':'none';
+  updateModeControls();
   const cell=PARAMS.get('cell');
   if(cell) S.pendingSelect=cell;
 }
@@ -1672,6 +2019,7 @@ function syncURL(){
   q.set('res',S.resMode);
   q.set('mode',S.mode);
   if(S.mode==='change') q.set('metric',S.changeMetric);
+  if(isAnalysisMode()) q.set('idx',S.analysisIdx);
   if(S.season!=='all') q.set('season',S.season);
   if(S.opacity!==85) q.set('opacity',String(S.opacity));
   if(S.selected) q.set('cell',S.selected);
