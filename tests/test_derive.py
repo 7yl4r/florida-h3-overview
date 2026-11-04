@@ -98,6 +98,9 @@ def test_derive_manifest(synth):
     assert manifest["overview"]["nBins"] == len(bins_)
     # The manifest records the full method spec string.
     assert any(m.startswith("harmonic_fscan_v1") for m in manifest["methods"])
+    assert [a["key"] for a in manifest["analysis"]] == [
+        "trend", "trendz", "amp", "phase", "r2", "anom",
+    ]
     assert (c.derived_dir / "manifest.json").exists()
 
 
@@ -116,6 +119,13 @@ def test_derive_bundle_fields(synth):
     # Cellraw counts.
     assert "cellraw.n_obs_total" in data
     assert "cellraw.n_bins" in data
+    # Whole-record trend/season assessment, one field per index.
+    for field in ("cell.trend.ndvi", "cell.trendz.ndvi", "cell.amp.ndvi",
+                  "cell.phase.ndvi", "cell.r2.ndvi", "cell.anom.ndvi",
+                  "cell.mean.ndvi", "cell.std.ndvi"):
+        assert field in data, f"missing {field}"
+    assert "cellraw.anomp.ndvi" in data
+    assert desc["cells"] and desc["cellraws"]
     # Change fields on the single pseudo-period.
     assert "break_bin" in data
     assert "break_score" in data

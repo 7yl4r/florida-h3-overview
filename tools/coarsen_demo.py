@@ -31,8 +31,11 @@ import h3
 import numpy as np
 
 from florida_h3.binary import MISSING, read_block, write_block
+from florida_h3.analysis import SPECS as ANALYSIS_SPECS, analyse
 from florida_h3.campaign import Campaign
 from florida_h3.catalog import write_catalog
+from florida_h3.change import detect_breaks
+from florida_h3.export import _change_block
 from florida_h3.shard import compute_content_hash, get_region_parent
 
 
@@ -76,8 +79,36 @@ def _boundary_geometry(cells: list[str]) -> tuple[list[int], list[float]]:
     return nverts, flat
 
 
+def _analysis_fields(fields, indices, periods, observed):
+    """Trend/season/residual assessment for one output block."""
+    index_values = {
+        name: fields[f"index.{name}"]
+        for name in indices
+        if f"index.{name}" in fields
+    }
+    return analyse(periods, index_values, observed)
+
+
+def _change_for(fields, periods, campaign: Campaign):
+    """Recompute the break layer from the block's own NDVI series.
+
+    The imported res-7 overview carried the change fields only on its res-8
+    region shards, so the coarsened product lost them.  Computing the layer
+    here keeps the demo's change mode working at both resolutions.
+    """
+    ndvi = fields.get("index.ndvi")
+    if ndvi is None:
+        return None
+    bins = [int(p["bin"]) for p in periods]
+    change = detect_breaks(
+        ndvi, bins, campaign.epoch, campaign.bin_days
+    )
+    return _change_block(change, campaign)
+
+
 def _make_block(ids, lon, lat, area, fields, observed, valid_fraction,
-                n_obs, periods, meta: dict, res: int, tier: str) -> dict:
+                n_obs, periods, meta: dict, res: int, tier: str,
+                analysis=None, change=None) -> dict:
     block = {
         "periods": periods,
         "nCells": len(ids),
@@ -101,6 +132,10 @@ def _make_block(ids, lon, lat, area, fields, observed, valid_fraction,
     for name, values in fields.items():
         group, short = name.split(".", 1)
         block[group][short] = _rows(values, 4)
+    if analysis:
+        block["cell"], block["cellraw"] = analysis
+    if change:
+        block["change"] = change
     nverts, flat = _boundary_geometry(list(ids))
     block["_nVerts"] = nverts
     block["_geomXY"] = flat
@@ -137,6 +172,7 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
             campaign_path: Path) -> dict:
     manifest_path = src_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    campaign = Campaign.load(campaign_path)
 
     source = src_dir / (source_name or manifest["overview"]["file"])
     if not source.exists():
@@ -214,6 +250,8 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
     overview_block = _make_block(
         parents, ov_lon, ov_lat, ov_area, agg_fields, agg_obs, agg_vf,
         agg_nobs, periods, meta, overview_res, "overview",
+        analysis=_analysis_fields(agg_fields, meta["indices"], periods, agg_obs),
+        change=_change_for(agg_fields, periods, campaign),
     )
     info = write_block(
         overview_block, str(src_dir / f"overview_res{overview_res}.bin")
@@ -234,6 +272,9 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
             [ids[i] for i in sel], lon[sel], lat[sel], area[sel], sub_fields,
             observed[:, sel], valid_fraction[:, sel], n_obs[:, sel], periods,
             meta, detail_res, "region",
+            analysis=_analysis_fields(sub_fields, meta["indices"], periods,
+                                      observed[:, sel]),
+            change=_change_for(sub_fields, periods, campaign),
         )
         info = write_block(
             block, str(src_dir / f"region_{parent}_res{detail_res}.bin")
@@ -257,6 +298,12 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
         overview_path, overview_res, n_parents, n_periods, ov_lon, ov_lat,
     )
     manifest["regions"] = regions
+    manifest["analysis"] = ANALYSIS_SPECS
+    manifest["analysis_note"] = (
+        "Whole-record trend + wet/dry season fit per index; amp is half the "
+        "fitted swing, phase is the peak season centre, anom is the largest "
+        "residual in units of the cell's own residual scatter."
+    )
     manifest["note"] = (
         f"Coarsened demo: res {overview_res} overview + res {detail_res} "
         f"region shards aggregated from the res {source_res} overview to keep "
@@ -287,7 +334,6 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
         if path.name not in written:
             path.unlink()
 
-    campaign = Campaign.load(campaign_path)
     write_catalog(campaign)
 
     return {

@@ -33,11 +33,12 @@ from pathlib import Path
 import numpy as np
 
 from . import bins as binmod
+from .analysis import SPECS as ANALYSIS_SPECS, analyse
 from .binary import read_descriptor, write_block
 from .campaign import Campaign
 from .composite import load_composite
 from .export import _change_block, add_geometry, periods_for
-from .features import _ratio
+from .features import _ratio, compute_indices
 from .grid import build_grids
 from .shard import compute_content_hash, group_cells_by_region
 
@@ -83,10 +84,12 @@ def cached_bins(campaign: Campaign, res: int,
 def load_series(campaign: Campaign, grid, years: list[int] | None = None) -> dict:
     """Load the per-bin cache for one grid into a dense record.
 
-    Returns a dict with ``bins`` (sorted bin numbers), ``ndvi`` shaped
-    ``(n_bins, n_cells)``, the band arrays, observed flags, valid fraction and
-    scene counts.  Bins with no cache entry are simply absent; a missing bin is
-    not the same as a bin with no valid pixels, and neither is invented here.
+    Returns a dict with ``bins`` (sorted bin numbers), ``ndvi`` and every
+    campaign index shaped ``(n_bins, n_cells)``, the band arrays, observed
+    flags, valid fraction, scene counts and the period descriptors the
+    trend/season fit needs.  Bins with no cache entry are simply absent; a
+    missing bin is not the same as a bin with no valid pixels, and neither is
+    invented here.
     """
     entries = cached_bins(campaign, grid.resolution, years)
     if not entries:
@@ -119,13 +122,20 @@ def load_series(campaign: Campaign, grid, years: list[int] | None = None) -> dic
         n_obs.append(np.asarray(sup["n_obs"], dtype=np.int32))
 
     ndvi = _ratio(np.stack(refl["nir"]), np.stack(refl["red"]))
+    refl_by_band = {k: np.stack(v) for k, v in refl.items()}
+    indices = compute_indices(
+        refl_by_band, campaign.index_specs, campaign.indices
+    )
     return {
         "bins": used_bins,
-        "refl": {k: np.stack(v) for k, v in refl.items()},
+        "refl": refl_by_band,
+        "indices": {k: np.asarray(v, dtype=np.float64)
+                    for k, v in indices.items()},
         "ndvi": ndvi.astype(np.float32),
         "observed": np.stack(observed),
         "valid_fraction": np.stack(valid_fraction),
         "n_obs": np.stack(n_obs),
+        "periods": periods_for(campaign, used_bins),
     }
 
 
@@ -148,6 +158,9 @@ def compute_derived(campaign: Campaign, grid,
     change = detect_breaks(
         ndvi, bins_list, campaign.epoch, campaign.bin_days
     )
+    analysis_cell, analysis_raw = analyse(
+        series["periods"], series["indices"], series["observed"]
+    )
 
     n_obs_total = np.nansum(series["n_obs"], axis=0).astype(np.int64)
     n_bins = np.isfinite(ndvi).sum(axis=0).astype(np.int64)
@@ -163,6 +176,8 @@ def compute_derived(campaign: Campaign, grid,
         "n_obs_total": n_obs_total,
         "n_bins": n_bins,
         "change": change,
+        "analysis_cell": analysis_cell,
+        "analysis_raw": analysis_raw,
     }
 
 
@@ -206,10 +221,14 @@ def _derived_block(campaign: Campaign, grid, derived: dict) -> dict:
             "ndvi_mean": np.asarray(derived["ndvi_mean"], dtype=np.float64),
             "ndvi_std": np.asarray(derived["ndvi_std"], dtype=np.float64),
             "observed_fraction": np.asarray(derived["observed_fraction"], dtype=np.float64),
+            **{k: np.asarray(v, dtype=np.float64)
+               for k, v in derived["analysis_cell"].items()},
         },
         "cellraw": {
             "n_obs_total": np.asarray(derived["n_obs_total"], dtype=np.int64),
             "n_bins": np.asarray(derived["n_bins"], dtype=np.int64),
+            **{k: np.asarray(v, dtype=np.int64)
+               for k, v in derived["analysis_raw"].items()},
         },
     }
     add_geometry(block, grid)
@@ -227,6 +246,11 @@ def _subset_derived(derived: dict, indices: np.ndarray) -> dict:
                 "n_obs_used", "method"):
         change[key] = np.asarray(change[key])[indices]
     out["change"] = change
+    for key in ("analysis_cell", "analysis_raw"):
+        out[key] = {
+            name: np.asarray(values)[indices]
+            for name, values in derived[key].items()
+        }
     return out
 
 
@@ -314,6 +338,7 @@ def write_derived(campaign: Campaign, resolutions: tuple[int, ...] | None = None
         "years": sorted(int(y) for y in (years or campaign.build_years)),
         "bins": sorted({int(b) for y in (years or campaign.build_years)
                         for b in campaign.bins_for_year(y)}),
+        "analysis": ANALYSIS_SPECS,
         "methods": sorted(methods),
         "overview": overview,
         "regions": regions,
