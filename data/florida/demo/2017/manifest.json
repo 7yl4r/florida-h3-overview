@@ -265,7 +265,7 @@
   "nbr",
   "savi"
  ],
- "name": "South Florida Regional (res 6 overview / res 7 detail) (res 6 overview / res 7 detail) (res 6 overview / res 7 detail)",
+ "name": "South Florida Regional (res 6 overview / res 7 detail)",
  "note": "Coarsened demo: res 6 overview + res 7 region shards aggregated from the res 7 overview to keep browser memory bounded.",
  "overview": {
   "bytes": 1625107,
