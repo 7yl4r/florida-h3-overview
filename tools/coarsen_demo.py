@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import warnings
 from pathlib import Path
 
@@ -287,9 +288,13 @@ def coarsen(src_dir: Path, overview_res: int, detail_res: int,
         ))
 
     # --- manifest ---
+    # Running this tool twice should not keep appending the resolution suffix.
+    base_name = re.sub(
+        r"(?:\s*\(res \d+ overview / res \d+ detail\))+$", "",
+        manifest.get("name", "South Florida Regional"),
+    )
     manifest["name"] = (
-        f"{manifest.get('name', 'South Florida Regional')} "
-        f"(res {overview_res} overview / res {detail_res} detail)"
+        f"{base_name} (res {overview_res} overview / res {detail_res} detail)"
     )
     manifest["overview_res"] = int(overview_res)
     manifest["detail_res"] = int(detail_res)
