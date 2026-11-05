@@ -110,7 +110,10 @@ class CampaignBuild:
         self.log(f"[stac] enumerating {len(self.bins_list)} bins for {self.year}")
         scenes_by_bin = {}
         for b in self.bins_list:
-            scenes = stac_mod.find_scenes_for_bin(self.campaign, b)
+            scenes = _with_retry(
+                lambda: stac_mod.find_scenes_for_bin(self.campaign, b),
+                attempts=4, base_delay=15.0, log=self.log,
+            )
             if scenes:
                 scenes_by_bin[b] = scenes
                 self.log(f"  bin {b} ({self.campaign.bin_start(b)}): "
@@ -170,9 +173,12 @@ class CampaignBuild:
                 out[b] = cached
                 continue
             t0 = time.time()
-            out[b] = mosaic_mod.build_mosaic_bin(
-                self.campaign, b, scenes, dest,
-                workers=self.workers, log=self.log,
+            out[b] = _with_retry(
+                lambda b=b, scenes=scenes, dest=dest: mosaic_mod.build_mosaic_bin(
+                    self.campaign, b, scenes, dest,
+                    workers=self.workers, log=self.log,
+                ),
+                attempts=4, base_delay=30.0, log=self.log,
             )
             self.log(f"  bin {b}: mosaic in {time.time() - t0:.0f}s")
         return out
@@ -316,6 +322,27 @@ def parse_stages(spec: str | None) -> list[str]:
     if not spec:
         return list(STAGES)
     return [s.strip() for s in spec.split(",") if s.strip()]
+
+
+def _with_retry(fn, attempts: int, base_delay: float, log) -> object:
+    """Run ``fn`` with exponential-backoff retries for transient failures.
+
+    A single failed attempt (e.g. a remote scene read dying mid-GET) is
+    retried; only a persistent failure propagates.  Retrying at this level
+    matters for the week-long build loop: without it one bad network minute
+    aborts a whole year and an unattended run stops.
+    """
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 - retried, then re-raised
+            if attempt == attempts - 1:
+                raise
+            delay = base_delay * 2 ** attempt
+            log(f"  retry {attempt + 1}/{attempts - 1} in {delay:.0f}s "
+                f"after: {exc}")
+            time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 def main(argv=None) -> int:
