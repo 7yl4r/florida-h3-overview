@@ -13,15 +13,15 @@ def test_campaign_loads():
     assert c.pixel_size == 90
     assert c.detail_pixel_size == 30
     assert c.resolutions == (7, 8)
-    assert c.year_start == 2017 and c.year_end == 2017
-    assert c.build_years == [2017]
+    assert c.year_start == 2000 and c.year_end == 2026
+    assert c.build_years == list(range(2000, 2027))
     assert c.bin_days == 16
     assert c.epoch.isoformat() == "2000-01-01"
 
 
 def test_campaign_hash_and_area():
     c = Campaign.load(CAMPAIGN)
-    assert c.hash == "bdd5aac9a63baa6f"
+    assert c.hash == "63bf8c15e5bfc24a"
     assert c.aoi_hash == "84627e8785367888"
     assert c.area_km2 == 239655.23
 
@@ -32,7 +32,7 @@ def test_campaign_summary():
     assert "239,655 km" in s
     assert "EPSG:3086 @ 90 m" in s
     assert "res (7, 8)" in s
-    assert "2017-2017" in s
+    assert "2000-2026" in s
 
 
 def test_campaign_bin_partition():

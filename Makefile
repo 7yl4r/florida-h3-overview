@@ -9,7 +9,7 @@ PY ?= /home/tylar/miniconda3/bin/python
 NODE ?= node
 VIEWER_JS := /tmp/florida-viewer-check.js
 
-.PHONY: help deploy publish test lint check serve clean fmt
+.PHONY: help deploy publish test lint check serve clean fmt build-years finalize
 
 help:
 	@echo "Florida H3 Overview — targets:"
@@ -18,6 +18,8 @@ help:
 	@echo "  make test     run the pytest suite"
 	@echo "  make lint     byte-compile every Python module"
 	@echo "  make serve    serve the repo over HTTP for local viewer testing"
+	@echo "  make build-years  run the full multi-year build loop (long)"
+	@echo "  make finalize     derive + catalog + validate over all built years"
 	@echo "  make deploy   validate and publish the viewer + demo data to the gh-pages branch"
 	@echo "  make clean    remove dist/ and __pycache__"
 
@@ -36,6 +38,19 @@ check-viewer-js:
 	$(NODE) --check $(VIEWER_JS)
 	@rm -f $(VIEWER_JS)
 	@echo "lint: viewer JavaScript parses"
+
+# Multi-year build loop: iterates the campaign's build years (2000-2026).
+# Runtime is roughly a day per year at 90 m / res 7; each year restarts where
+# it left off, so the loop can be interrupted and re-launched freely.
+build-years:
+	PYTHONPATH=src $(PY) -m florida_h3.run --campaign campaigns/florida-south.json \
+		--stage grid,stac,mosaic,h3,product --workers 12
+
+# Whole-record derive + catalog + validate. Run once after build-years has
+# produced every year you want; derive reads the accumulated h3 cache only.
+finalize:
+	PYTHONPATH=src $(PY) -m florida_h3.run --campaign campaigns/florida-south.json \
+		--stage derive,catalog,validate --workers 12
 
 serve:
 	@echo "serving http://127.0.0.1:8000/viewer/florida.html?year=2017"

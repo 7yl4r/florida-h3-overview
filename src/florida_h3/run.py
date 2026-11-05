@@ -273,7 +273,9 @@ class CampaignBuild:
     # -- stage: derive ------------------------------------------------------
     def stage_derive(self) -> dict:
         self.log("[derive] building whole-record layers")
-        manifest = write_derived(self.campaign, years=[self.year], gz=self.gz)
+        # Whole-record layers span every build year, so they ignore the
+        # per-year partition and always read the full accumulated h3 cache.
+        manifest = write_derived(self.campaign, years=None, gz=self.gz)
         self.log(f"  overview: {manifest['overview']}")
         self.log(f"  regions: {len(manifest['regions'])} shards")
         return manifest

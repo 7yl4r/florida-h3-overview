@@ -19,9 +19,8 @@
     "region_res": 4
   },
   "years": {
-    "start": 2017,
-    "end": 2017,
-    "build": [2017]
+    "start": 2000,
+    "end": 2026
   },
   "temporal": {
     "epoch": "2000-01-01",
@@ -30,7 +29,7 @@
   "sources": {
     "stac_endpoint": "https://planetarycomputer.microsoft.com/api/stac/v1",
     "collection": "landsat-c2-l2",
-    "platforms": ["landsat-7", "landsat-8"]
+    "platforms": ["landsat-5", "landsat-7", "landsat-8", "landsat-9"]
   },
   "processing": {
     "min_valid_fraction": 0.25,
