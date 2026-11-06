@@ -263,6 +263,11 @@ class CampaignBuild:
     # -- stage: product -----------------------------------------------------
     def stage_product(self) -> dict:
         grids, _ = self.grids()
+        if not self.force:
+            cached = self._cached_product()
+            if cached is not None:
+                self.log(f"[product] cached: {cached['dir']}")
+                return cached
         composites = self.load_composites()
         if not composites:
             raise RuntimeError("no h3 cache; run the h3 stage first")
@@ -275,6 +280,36 @@ class CampaignBuild:
         self.log(f"  overview: {info['overview']}")
         self.log(f"  regions: {len(info['regions'])} shards")
         return info
+
+    def _cached_product(self) -> dict | None:
+        """A prior export is reusable when its identity matches and every
+        bundle on disk. That makes a supervisor relaunch cheap: completed
+        years skip product work instead of re-exporting."""
+        out_dir = self.campaign.year_product(self.year)
+        manifest_path = out_dir / "manifest.json"
+        if not manifest_path.exists():
+            return None
+        try:
+            with manifest_path.open(encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        except Exception:  # noqa: BLE001 - unreadable manifest: rebuild
+            return None
+        if (manifest.get("campaign_hash") != self.campaign.hash
+                or manifest.get("aoi_hash") != self.campaign.aoi_hash):
+            return None
+        items = []
+        if manifest.get("overview"):
+            items.append(manifest["overview"])
+        items.extend(manifest.get("regions") or [])
+        for item in items:
+            path = out_dir / item["file"]
+            if not path.exists():
+                return None
+        return {
+            "dir": out_dir,
+            "overview": manifest["overview"],
+            "regions": manifest.get("regions", []),
+        }
 
     # -- stage: derive ------------------------------------------------------
     def stage_derive(self) -> dict:
