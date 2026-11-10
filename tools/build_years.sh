@@ -15,7 +15,7 @@ PY="${PY:-/home/tylar/miniconda3/bin/python}"
 RUNNER="florida_h3.run"
 LOG="${LOG:-data/florida/build.log}"
 COOLDOWN="${COOLDOWN:-600}"          # seconds between relaunches
-MAX_RELAUNCHES="${MAX_RELAUNCHES:-30}"
+MAX_RELAUNCHES="${MAX_RELAUNCHES:-120}"
 CAMPAIGN="${CAMPAIGN:-campaigns/florida-south.json}"
 STAGES="${STAGES:-grid,stac,mosaic,h3,product}"
 

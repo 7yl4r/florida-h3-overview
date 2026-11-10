@@ -28,12 +28,17 @@ def test_build_catalog_structure():
     assert cat["aoi_geojson"]["type"] == "Polygon"
     assert "2017" in cat["years"]
     entry = cat["years"]["2017"]
-    assert entry["demo"] is True
     assert entry["stale"] is False
-    assert entry["periods"] == 23
-    assert entry["regions"] == 72
     assert entry["overview"]["nCells"] > 0
-    assert entry["overview"]["res"] in (6, 7)
+    assert entry["periods"] > 0
+    if entry.get("demo"):
+        # Product tree not yet rebuilt for 2017: the imported pilot demo
+        # fills the slot and its AOI is the old bbox.
+        assert entry["periods"] == 23
+        assert entry["regions"] == 72
+        assert entry["overview"]["res"] in (6, 7)
+    else:
+        assert entry["overview"]["res"] == 7
 
 
 @requires_demo_data

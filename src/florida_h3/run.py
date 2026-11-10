@@ -178,7 +178,7 @@ class CampaignBuild:
                     self.campaign, b, scenes, dest,
                     workers=self.workers, log=self.log,
                 ),
-                attempts=4, base_delay=30.0, log=self.log,
+                attempts=5, base_delay=60.0, log=self.log,
             )
             self.log(f"  bin {b}: mosaic in {time.time() - t0:.0f}s")
         return out
