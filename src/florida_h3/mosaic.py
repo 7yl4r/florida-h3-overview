@@ -57,6 +57,13 @@ QA_SNOWICE_BAD = (0b01, 0b11)
 BLOCK = 512
 REOPEN_AFTER = 1200.0
 
+# Sentinel for a scene whose QA asset cannot be read at all.  Such scenes are
+# dropped from the bin instead of stalling the whole year: a handful of USGS
+# tier-2 blobs are known to serve an HTML error document in place of the TIFF
+# (e.g. LC08_L2SP_018042_20220505_02_T2 QA_PIXEL in 2022), which never heals
+# with retries.  Dropping one scene of dozens changes the median negligibly.
+_DROPPED = object()
+
 
 class _SceneReader:
     def __init__(self, scene, transform, shape, crs):
@@ -231,8 +238,25 @@ def build_mosaic_bin(campaign: Campaign, bin_num: int, scenes, out_dir,
         raise ValueError(f"bin {bin_num}: no scene intersects the analysis grid")
 
     nobs = np.zeros((h, w), dtype=np.uint8)
+
+    def _qa_or_drop(reader):
+        try:
+            return reader.read_qa_mask()
+        except Exception as exc:  # noqa: BLE001 - corrupt/blurred asset
+            log(f"  ! dropping scene (qa unreadable): "
+                f"{reader.scene.item_id}: {str(exc)[:160]}")
+            return _DROPPED
+
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        qa_masks = list(ex.map(lambda r: r.read_qa_mask(), readers))
+        qa_results = list(ex.map(_qa_or_drop, readers))
+    if any(m is _DROPPED for m in qa_results):
+        keep = [i for i, m in enumerate(qa_results) if m is not _DROPPED]
+        readers = [readers[i] for i in keep]
+        qa_masks = [qa_results[i] for i in keep]
+        if not readers:
+            raise ValueError(f"bin {bin_num}: every scene is unreadable")
+    else:
+        qa_masks = qa_results
     for reader, mask in zip(readers, qa_masks):
         if mask is None:
             continue
@@ -249,9 +273,21 @@ def build_mosaic_bin(campaign: Campaign, bin_num: int, scenes, out_dir,
             t_read = t_cpu = 0.0
             try:
                 t0 = time.time()
+
+                def _band_or_drop(reader, band=band):
+                    try:
+                        return _read_footprint(reader, band)
+                    except Exception as exc:  # noqa: BLE001 - blurred asset
+                        log(f"  ! dropping band for scene "
+                            f"{reader.scene.item_id} {band}: {str(exc)[:160]}")
+                        return None
+
                 with ThreadPoolExecutor(max_workers=workers) as ex:
-                    parts = list(ex.map(lambda r: _read_footprint(r, band),
-                                        readers))
+                    parts = list(ex.map(_band_or_drop, readers))
+                if all(p is None for p in parts):
+                    raise RuntimeError(
+                        f"bin {bin_num}: band {band} unreadable for every scene"
+                    )
                 t_read = time.time() - t0
                 t0 = time.time()
                 for row0 in range(0, h, block):

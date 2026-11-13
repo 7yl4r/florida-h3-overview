@@ -16,6 +16,7 @@ RUNNER="florida_h3.run"
 LOG="${LOG:-data/florida/build.log}"
 COOLDOWN="${COOLDOWN:-600}"          # seconds between relaunches
 MAX_RELAUNCHES="${MAX_RELAUNCHES:-120}"
+STAGNANT_LIMIT="${STAGNANT_LIMIT:-6}"  # stop if this many relaunches add nothing
 CAMPAIGN="${CAMPAIGN:-campaigns/florida-south.json}"
 STAGES="${STAGES:-grid,stac,mosaic,h3,product}"
 
@@ -42,11 +43,23 @@ PYEOF
 }
 
 i=0
+last_have=-1
+stagnant=0
 while :; do
   read -r have need <<<"$(count_years_done)"
   if [ "$have" -eq "$need" ]; then
     echo "[supervisor] all $have/$need years have product manifests; done" | tee -a "$LOG"
     exit 0
+  fi
+  if [ "$have" -le "$last_have" ]; then
+    stagnant=$((stagnant + 1))
+  else
+    stagnant=0
+    last_have="$have"
+  fi
+  if [ "$stagnant" -ge "$STAGNANT_LIMIT" ]; then
+    echo "[supervisor] no progress in $STAGNANT_LIMIT relaunches at $have/$need years; stopping for diagnosis" | tee -a "$LOG"
+    exit 2
   fi
   if [ "$i" -ge "$MAX_RELAUNCHES" ]; then
     echo "[supervisor] giving up after $MAX_RELAUNCHES relaunches at $have/$need years" | tee -a "$LOG"
