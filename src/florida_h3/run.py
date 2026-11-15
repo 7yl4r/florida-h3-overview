@@ -47,6 +47,10 @@ from .grid import analysis_grid, build_grids, build_label_raster, grid_summary
 STAGES = ("grid", "stac", "mosaic", "h3", "product", "derive", "catalog",
           "validate")
 STAGE_ORDER = {name: i for i, name in enumerate(STAGES)}
+# Year-partitioned stages run once per build year; whole-record stages read
+# whatever years exist and run once at the end.
+YEAR_STAGES = ("grid", "stac", "mosaic", "h3", "product")
+WHOLE_RECORD_STAGES = ("derive", "catalog", "validate")
 
 
 def _log(msg: str) -> None:
@@ -405,13 +409,27 @@ def main(argv=None) -> int:
         raise SystemExit("campaign has no build years")
 
     stages = parse_stages(args.stage)
-    for year in years:
-        print(f"\n=== {campaign.name} · {year} ===", flush=True)
+    year_stages = [s for s in stages if s in YEAR_STAGES]
+    whole_stages = [s for s in stages if s in WHOLE_RECORD_STAGES]
+
+    if year_stages:
+        for year in years:
+            print(f"\n=== {campaign.name} · {year} ===", flush=True)
+            build = CampaignBuild(
+                campaign, year, force=args.force, gz=not args.no_gzip,
+                workers=args.workers,
+            )
+            build.run(year_stages)
+    if whole_stages:
+        # Derive/catalog/validate span every year that exists on disk; running
+        # them once per year would rebuild whole-record layers N times.
+        print(f"\n=== {campaign.name} · whole record "
+              f"{years[0]}-{years[-1]} ===", flush=True)
         build = CampaignBuild(
-            campaign, year, force=args.force, gz=not args.no_gzip,
+            campaign, years[-1], force=args.force, gz=not args.no_gzip,
             workers=args.workers,
         )
-        build.run(stages)
+        build.run(whole_stages)
     return 0
 
 
