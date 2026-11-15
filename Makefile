@@ -63,10 +63,8 @@ deploy: check
 	cleanup() { git worktree remove --force "$$wt" >/dev/null 2>&1 || true; rm -rf "$$bundle" "$$wt"; }; \
 	trap cleanup EXIT; \
 	echo "=== deploy: staging viewer + data ==="; \
-	mkdir -p "$$bundle/data/florida"; \
-	cp viewer/florida.html "$$bundle/florida.html"; \
-	( cd data/florida && tar cf - --exclude=./cache . ) | ( cd "$$bundle/data/florida" && tar xf - ); \
-	touch "$$bundle/.nojekyll"; \
+	PYTHONPATH=src $(PY) tools/stage_deploy.py \
+		--campaign campaigns/florida-south.json --out "$$bundle"; \
 	git fetch origin 2>/dev/null || true; \
 	git worktree add --detach "$$wt" HEAD >/dev/null; \
 	if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then \
@@ -83,10 +81,11 @@ deploy: check
 	echo "=== deployed to gh-pages ==="
 	@echo "Open it: https://tylar.info/florida-h3-overview/florida.html?year=2017"
 	@echo ""
-	@echo "Note: data/ is gitignored locally but the demo product is deployed"
-	@echo "to gh-pages with the viewer, so the catalog loads automatically."
+	@echo "Deploys every year's res-7 overview + derived overview layers, the"
+	@echo "imported demo, and a staged catalog; res-8 detail shards (~3.2 GB)"
+	@echo "stay local and need object storage, not GitHub Pages (~1 GB cap)."
 	@echo ""
-	@echo "For local testing, open:"
+	@echo "For local testing (full detail), open:"
 	@echo "  http://localhost:8000/viewer/florida.html?catalog=../data/florida/catalog.json&year=2017"
 	@echo ""
 	@echo "One-time: set GitHub Pages source to 'Deploy from a branch' -> gh-pages"
